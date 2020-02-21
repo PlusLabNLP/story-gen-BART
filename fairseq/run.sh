@@ -24,7 +24,7 @@ python train.py temp \
     --clip-norm 0.1 \
     --lr-scheduler polynomial_decay --lr $LR --total-num-update $TOTAL_NUM_UPDATES --warmup-updates $WARMUP_UPDATES \
     --memory-efficient-fp16 --update-freq $UPDATE_FREQ \
-    --save-dir "checkpoint-promptplot" \
+    --save-dir "checkpoint" \
     --ddp-backend=no_c10d  \
     --skip-invalid-size-inputs-valid-test \
     --find-unused-parameters;
