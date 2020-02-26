@@ -60,9 +60,12 @@ class Encoder:
             raise ImportError('Please install regex with: pip install regex')
 
         # Should haved added re.IGNORECASE so BPE merges can happen for capitalized versions of contractions
-        self.pat = self.re.compile(r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+        self.pat = self.re.compile(r"""'s|'t|'re|'ve|'m|<A0>|<EOT>| <EOT>|<V>|<A1>|<A2>| <A0>|<P>| <P>|<A1>| <A1>| <A2>| <V>| </s>|</s>|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
 
     def bpe(self, token):
+        if token in ['<A0>','<A1>','<A2>','<V>','</s>','<P>','<EOT>','\u0120<A0>','\u0120<A1>','\u0120<A2>','\u0120<V>','\u0120</s>','\u0120<P>','\u0120<EOT>']:
+            #print("inside bpe",token)
+            return token
         if token in self.cache:
             return self.cache[token]
         word = tuple(token)
@@ -105,17 +108,35 @@ class Encoder:
 
     def encode(self, text):
         bpe_tokens = []
+        # print("Text is",text)
+        # print("All is" ,self.re.findall(self.pat, text))
         for token in self.re.findall(self.pat, text):
             token = ''.join(self.byte_encoder[b] for b in token.encode('utf-8'))
+            # if token in ['<A0>','<A1>','<A2>','<V>','</s>','\u0120<A0>','\u0120<A1>','\u0120<A2>','\u0120<V>','\u0120</s>']:
+                # print("Token is |",token,"|")
+                # token= token.lstrip()
+            #     bpe_tokens.extend(self.encoder[token])
+            # else:
+            #     print("Token here is ",token)
+            #     print(self.bpe(token),self.bpe(token))
+            #     for bpe_token in self.bpe(token).split(' '):
+            #         print(bpe_token,self.encoder[bpe_token])
             bpe_tokens.extend(self.encoder[bpe_token] for bpe_token in self.bpe(token).split(' '))
+        #print("bpe tokens is ",self.re.findall(self.pat, text),'\n',bpe_tokens)
         return bpe_tokens
 
     def decode(self, tokens):
+        #print(tokens)
+        arr = []
+        for token in tokens:
+            arr.append(self.decoder.get(token, token))
+            #print(type(self.decoder.get(token, token)),print(self.decoder.get(token, token)))
         text = ''.join([self.decoder.get(token, token) for token in tokens])
         text = bytearray([self.byte_decoder[c] for c in text]).decode('utf-8', errors=self.errors)
         return text
 
 def get_encoder(encoder_json_path, vocab_bpe_path):
+    encoder_json_path = "/nas/home/tuhinc/fairseq/encoder.json"
     with open(encoder_json_path, 'r') as f:
         encoder = json.load(f)
     with open(vocab_bpe_path, 'r', encoding="utf-8") as f:
