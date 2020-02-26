@@ -5,6 +5,7 @@
 
 import math
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -221,9 +222,16 @@ class Sampling(Search):
         trimed_probs = truncated_probs.masked_fill_(trim_mask, 0)
         return trimed_probs, truncated_indices
 
-    def step(self, step, lprobs, scores):
+    def step(self, step, lprobs, scores, src_tokens=None, tgt_tokens=None, **kwargs): # src and tgt_tokens to far #TODO make sure that we get an empty tgt tokens on first pass
+        print("First lprobs: {}".format(lprobs))
         super()._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
+
+        # use kwargs to init discriminator stuff
+        rescore = kwargs.get("rescore", "False")
+        coefs = kwargs.get("coefs", [])
+        scorers = kwargs.get("scorers", [])
+        learn = kwargs.get("learn", "False")
 
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
@@ -239,6 +247,43 @@ class Sampling(Search):
             probs = lprobs.exp_()
         else:
             probs = lprobs.exp_()
+
+        print(lprobs, probs)
+        if rescore:
+            # potentially rescore
+            # also rescore gold if learning
+            # if learn and num_cont_words < len(
+            #         true_cont_tokens):  # add gold answer to the list
+            #     cont_tokens.append(true_cont_tokens[
+            #                        :num_cont_words])  # this appends all gold cont tokens up to the step number - so more gold on each iteration
+
+
+            score_adjustment = np.zeros(len(top_indices))
+            if rescore:  # add score adjustment according to the scorers.
+                #all_raw_scores = []
+                for coef, scorer in zip(coefs,
+                                        scorers):  # Note that this throws an error if there is just one scorer
+                    # this makes an array for each scorer from calling the scorer forward function on the candidate tokens
+                    # TODO could potentially make this faster by considering shared continuation to be init_tokens
+                    new_scores = scorer(src_tokens, tgt_tokens, False) # third arg is whether to have the discriminator normalize scores via logsigmoid. Defaulted to False in prev code
+                    raw_scores = np.asarray(new_scores)
+                    #all_raw_scores.append(raw_scores)
+                    # elementwise add the new scores to the np array after elementwise multiplying by coef
+                    score_adjustment += raw_scores[:len(
+                        top_indices)] * coef  # why restrict to len(candidates)? It seems like the scorer sometimes but not always returns +1 more result than candidates
+                #all_raw_scores = np.stack(all_raw_scores, axis=-1)  # this converts to num_candidates x num_scorers so each row is all adjusted scores for a candidate
+
+                #if self.learn and num_cont_words < len(true_cont_tokens):
+                #    gold_cont_raw_scores = all_raw_scores[-1]
+                print("Score Adjustment")
+                print(score_adjustment)
+                # print("Before Disc")
+                # print(probs)
+                # for i in range(len(top_indices)):
+                #     probs[i] = probs[i] + score_adjustment[i]
+                # print("After Disc")
+                # print(probs)
+                # TODO do I need to sort? I don't think so. top_indices were in descending order and now they aren't, but we sample from them so should be fine
 
         # sample
         if step == 0:

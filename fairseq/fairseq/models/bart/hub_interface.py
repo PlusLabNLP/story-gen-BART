@@ -121,6 +121,7 @@ class BARTHubInterface(nn.Module):
             [self.model],
             sample,
             prefix_tokens=sample['net_input']['src_tokens'].new_zeros((len(tokens), 1)).fill_(self.task.source_dictionary.bos()),
+            **kwargs
         )
 
         if verbose:

@@ -5,6 +5,7 @@
 
 import math
 
+import numpy as np
 import torch
 
 from fairseq import search, utils
@@ -270,7 +271,7 @@ class SequenceGenerator(object):
                     reorder_state.view(-1, beam_size).add_(corr.unsqueeze(-1) * beam_size)
                 model.reorder_incremental_state(reorder_state)
                 encoder_outs = model.reorder_encoder_out(encoder_outs, reorder_state)
-
+            # this gives a distribution over vocab... but then later it zeros out everything but chosen token?
             lprobs, avg_attn_scores = model.forward_decoder(
                 tokens[:, :step + 1], encoder_outs, temperature=self.temperature,
             )
@@ -355,12 +356,54 @@ class SequenceGenerator(object):
 
                 for bbsz_idx in range(bsz * beam_size):
                     lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
-
+            # the self.search.step actually only returns the top thing that you need. So we pass in src_tokens and tgt_tokens (so far) to be able to use discriminators in the search
+            # in kwargs will be all the other things we need
             cand_scores, cand_indices, cand_beams = self.search.step(
                 step,
                 lprobs.view(bsz, -1, self.vocab_size),
                 scores.view(bsz, beam_size, -1)[:, :, :step],
+                src_tokens,
+                tokens,
+                **kwargs
             )
+
+            if True: #TODO add if rescore here -- work out what init and cont tokens are
+                pass
+
+                # potentially rescore
+                # also rescore gold if learning
+                #TODO implement learning
+                # if learn and num_cont_words < len(
+                #         true_cont_tokens):  # add gold answer to the list
+                #     cont_tokens.append(true_cont_tokens[
+                #                        :num_cont_words])  # this appends all gold cont tokens up to the step number - so more gold on each iteration
+
+                # score_adjustment = np.zeros(len(cont_tokens))
+                # if rescore:  # add score adjustment according to the scorers.
+                #     all_raw_scores = []
+                #     for coef, scorer in zip(self.coefs,
+                #                             self.scorers):  # Note that this throws an error if there is just one scorer
+                #         # this makes an array for each scorer from calling the scorer forward function on the candidate tokens
+                #         # TODO could potentially make this faster by considering shared continuation to be init_tokens
+                #         new_scores = scorer(init_tokens, cont_tokens, self.norm_scores)
+                #         raw_scores = np.asarray(new_scores)
+                #         all_raw_scores.append(raw_scores)
+                #         # elementwise add the new scores to the np array after elementwise multiplying by coef
+                #         score_adjustment += raw_scores[:len(
+                #             cont_tokens)] * coef  # TODO why restrict to len(candidates)? It seems like the scorer sometimes but not always returns +1 more result than candidates
+                #     all_raw_scores = np.stack(all_raw_scores,
+                #                               axis=-1)  # this converts to num_candidates x num_scorers so each row is all adjusted scores for a candidate
+                #
+                #     if self.learn and num_cont_words < len(true_cont_tokens):
+                #         gold_cont_raw_scores = all_raw_scores[-1]
+                #
+                # for i in range(len(new_candidates)):
+                #     new_candidates[i].adjusted_score = cand_scores[i] + score_adjustment[i]
+                #     if rescore:
+                #         new_candidates[i].raw_scores = all_raw_scores[i]
+                # if rescore:
+                #     new_candidates.sort(key=lambda c: c.adjusted_score,
+                #                         reverse=True)  # TODO should I sort if NOT rescoring?
 
             # cand_bbsz_idx contains beam indices for the top candidate
             # hypotheses, with a range of values: [0, bsz*beam_size),
