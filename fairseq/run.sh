@@ -11,6 +11,7 @@ python train.py temp \
     --task translation \
     --source-lang source --target-lang target \
     --truncate-source \
+    --truncate-target \
     --layernorm-embedding \
     --share-all-embeddings \
     --share-decoder-input-output-embed \
