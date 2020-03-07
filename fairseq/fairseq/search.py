@@ -224,6 +224,7 @@ class Sampling(Search):
     def step(self, step, lprobs, scores):
         super()._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
+        logprob = None
 
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
@@ -236,11 +237,13 @@ class Sampling(Search):
         elif self.sampling_topk > 0:
             # only sample from top-k candidates
             lprobs, top_indices = lprobs.topk(self.sampling_topk)
+            logprob = lprobs.clone()
             probs = lprobs.exp_()
         else:
             probs = lprobs.exp_()
 
-        # sample
+        lprobs = logprob.clone()
+        #sample
         if step == 0:
             self.indices_buf = torch.multinomial(
                 probs.view(bsz, -1),
