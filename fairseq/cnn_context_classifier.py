@@ -5,19 +5,19 @@ import torch.autograd as autograd
 
 class CNNContextClassifier(nn.Module):
 
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, 
-                 filter_size, dropout_rate, embed_mat=None, fix_embeddings=False):
+    def __init__(self, hidden_dim,
+                 filter_size, dropout_rate, bart, fix_embeddings=False):
         super(CNNContextClassifier, self).__init__()
 
-        self.vocab_size = vocab_size
-        self.embedding_dim = embedding_dim
+        self.vocab_size = bart.model.encoder.embed_tokens.num_embeddings
+        self.embedding_dim = bart.model.encoder.embed_tokens.embedding_dim
         self.hidden_dim = hidden_dim
 
-        self.word_embeds = nn.Embedding(vocab_size, embedding_dim)
-        if embed_mat is not None:
-            self.word_embeds.weight.data = embed_mat
-            if fix_embeddings:
-                self.word_embeds.weight.requires_grad=False
+        self.word_embeds = bart.extract_features #nn.Embedding(vocab_size, embedding_dim)
+        # if embed_mat is not None:
+        #     self.word_embeds.weight.data = embed_mat
+        #     if fix_embeddings:
+        #         self.word_embeds.weight.requires_grad=False
         
         self.context_conv = nn.Conv1d(self.embedding_dim, self.embedding_dim, 
           filter_size, stride=1, padding=int((filter_size-1)/2), 
@@ -31,7 +31,7 @@ class CNNContextClassifier(nn.Module):
         self.drop = nn.Dropout(dropout_rate)
 
 
-    def embed_seq(self, vec):
+    def embed_seq(self, vec): # todo make sure this makes sense in BART world
         vec1 = self.word_embeds(vec.transpose(0, 1).contiguous())
         vec_tr = vec1.transpose(1, 2).contiguous()	
         return vec_tr # dim [batch_size, embed_dim, length]
