@@ -103,6 +103,14 @@ def my_collate(batch):
 
     raise TypeError(default_collate_err_msg_format.format(elem_type))
 
+def convert_nested_tuple_cuda(obj):
+    if isinstance(obj, tuple):
+        return convert_nested_tuple_cuda(obj)
+    elif isinstance(obj, torch.Tensor):
+        return obj.cuda()
+    return list(convert_nested_tuple_cuda(o) for o in obj)
+
+
 parser = argparse.ArgumentParser()
 # Data
 parser.add_argument('data_dir', type=str, help='path to data directory')
@@ -341,6 +349,16 @@ for epoch in range(args.num_epochs):
         batch_size = batch["context"].size()[1]
 
         def compute_loss(context, generated, gold):  #TODO move this
+            print(type(context), type(generated))
+            if args.cuda:
+                #print(context, generated, gold)
+                for x in [context, generated, gold]:
+                    if type(x) == tuple:
+                        x = tuple([item.cuda() for item in x])
+                    else:
+                        x = x.cuda()
+
+            print(type(context), type(generated))
             decision_negative = model(context, generated, itos=itos)
             decision_positive = model(context, gold, itos=itos)
             if args.ranking_loss or args.margin_ranking_loss:
@@ -436,15 +454,6 @@ for epoch in range(args.num_epochs):
                     if bg_item is not None:
                         temp2.append(bg_item)
                 batch.gold = tuple(temp2)
-
-                def convert_nested_tuple_cuda(obj):
-                    if isinstance(obj, tuple):
-                        return convert_nested_tuple_cuda(obj)
-                    elif isinstance(obj, torch.Tensor):
-                        return obj.cuda()
-                    # else:
-                    #     print('Jinrui Debug')
-                    return list(convert_nested_tuple_cuda(o) for o in obj)
 
 
 
