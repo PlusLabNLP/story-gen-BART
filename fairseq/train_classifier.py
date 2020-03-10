@@ -419,7 +419,7 @@ for epoch in range(args.num_epochs):
                 #     batch.generated, itos=itos)
                 # decision_positive = model(batch.context[0],
                 #     batch.gold, itos=itos)
-                batch_size = batch.context[0].size()[1]
+                batch_size = batch["context"].size()[1]
 
                 # bg = batch.generated
                 # item = torch.cat(bg, dim=-1).to('cuda')
@@ -427,12 +427,12 @@ for epoch in range(args.num_epochs):
 
                 temp = []
 
-                for bg_item in batch.generated:
+                for bg_item in batch["generated"]:
                     temp.append( bg_item)
-                batch.generated = tuple(temp)
+                    batch["generated"] = tuple(temp)
 
                 temp2 = []
-                for bg_item in batch.gold:
+                for bg_item in batch["gold"]:
                     if bg_item is not None:
                         temp2.append(bg_item)
                 batch.gold = tuple(temp2)
@@ -454,10 +454,10 @@ for epoch in range(args.num_epochs):
                 #     print("batch generated item: ", item)
 
 
-                decision_negative = model(batch.context[0],
-                        batch.generated, itos=itos)
-                decision_positive = model(batch.context[0],
-                    batch.gold, itos=itos)
+                decision_negative = model(batch["context"],
+                                          batch["generated"], itos=itos)
+                decision_positive = model(batch["context"],
+                                          batch["gold"], itos=itos)
 
                 if args.ranking_loss or args.margin_ranking_loss:
                     decision = decision_positive - decision_negative
