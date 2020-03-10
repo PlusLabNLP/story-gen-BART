@@ -194,6 +194,10 @@ bart = BARTModel.from_pretrained(
     checkpoint_file='checkpoint_best.pt',
     data_name_or_path='temp'
 )
+bart.eval()
+if args.cuda:
+    bart.cuda()
+    bart.half()
 
 print("Loading Data")
 
