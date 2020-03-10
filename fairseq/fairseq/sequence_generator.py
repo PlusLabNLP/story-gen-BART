@@ -5,6 +5,7 @@
 
 import math
 
+import numpy as np
 import torch
 
 from fairseq import search, utils
@@ -270,7 +271,7 @@ class SequenceGenerator(object):
                     reorder_state.view(-1, beam_size).add_(corr.unsqueeze(-1) * beam_size)
                 model.reorder_incremental_state(reorder_state)
                 encoder_outs = model.reorder_encoder_out(encoder_outs, reorder_state)
-
+            # this gives a distribution over vocab... but then later it zeros out everything but chosen token?
             lprobs, avg_attn_scores = model.forward_decoder(
                 tokens[:, :step + 1], encoder_outs, temperature=self.temperature,
             )
@@ -355,11 +356,15 @@ class SequenceGenerator(object):
 
                 for bbsz_idx in range(bsz * beam_size):
                     lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
-
+            # the self.search.step actually only returns the top thing that you need. So we pass in src_tokens and tgt_tokens (so far) to be able to use discriminators in the search
+            # in kwargs will be all the other things we need
             cand_scores, cand_indices, cand_beams = self.search.step(
                 step,
                 lprobs.view(bsz, -1, self.vocab_size),
                 scores.view(bsz, beam_size, -1)[:, :, :step],
+                src_tokens,
+                tokens,
+                **kwargs
             )
 
             # cand_bbsz_idx contains beam indices for the top candidate
