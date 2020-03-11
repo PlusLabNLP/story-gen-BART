@@ -31,10 +31,11 @@ from cnn_context_classifier import CNNContextClassifier
 
 class CustomIterableDataset(IterableDataset):
 
-    def __init__(self, filename, encoder):
+    def __init__(self, filename, encoder, max_tokens=1024):
         self.filename = filename
         self.fields = ["context", "generated", "gold", "label"]
         self.encoder = encoder
+        self.max_tokens = max_tokens
         self.data = self.preprocess()
 
     def __iter__(self):
@@ -46,7 +47,7 @@ class CustomIterableDataset(IterableDataset):
         file_itr = csv.DictReader(fin, delimiter='\t', fieldnames=self.fields)
         for line in file_itr:
             for field in self.fields[:-1]:
-                line[field] = self.encoder.encode(line[field])
+                line[field] = self.encoder.encode(line[field])[:self.max_tokens]
             line[self.fields[-1]] = float(line[self.fields[-1]])
             data.append(line)
         return data
@@ -102,14 +103,6 @@ def my_collate(batch):
         return [my_collate(samples) for samples in transposed]
 
     raise TypeError(default_collate_err_msg_format.format(elem_type))
-
-def convert_nested_tuple_cuda(obj):
-    if isinstance(obj, tuple):
-        return convert_nested_tuple_cuda(obj)
-    elif isinstance(obj, torch.Tensor):
-        return obj.cuda()
-    return list(convert_nested_tuple_cuda(o) for o in obj)
-
 
 parser = argparse.ArgumentParser()
 # Data
@@ -197,17 +190,10 @@ bart = BARTModel.from_pretrained(
 bart.eval()
 if args.cuda:
     bart.cuda()
-    bart.half()
+    #bart.half()
 
 print("Loading Data")
 
-
-# TEXT = data.Field(sequential=True, use_vocab=False, include_lengths=True)
-# TEXT.numericalize =
-#
-# # LABEL = data.Field(sequential=False, use_vocab=False, tensor_type=torch.FloatTensor, postprocessing=data.Pipeline(lambda x, y: float(x)))
-# LABEL = data.Field(sequential=False, use_vocab=False, dtype=torch.float, postprocessing=data.Pipeline(lambda x, y: float(x)))
-#
 
 valid_name = 'valid.txt.tiny.tsv'
 if args.valid_only:
@@ -222,55 +208,16 @@ print("Using {} as the training data".format(train_name))
 
 print('Reading the data')
 
-train = CustomIterableDataset(os.path.join(args.data_dir, train_name), bart)
-val = CustomIterableDataset(os.path.join(args.data_dir, valid_name), bart)
+train = CustomIterableDataset(os.path.join(args.data_dir, train_name), bart, max_tokens=600)
+val = CustomIterableDataset(os.path.join(args.data_dir, valid_name), bart, max_tokens=600)
 
 # TODO save and cache the preprocessed datasets cause that shit is slow
 train_iter = DataLoader(train, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True)
 valid_iter = DataLoader(val, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True)
 
 
-# train, valid = data.TabularDataset.splits(
-#     path=args.data_dir,
-#     train=train_name, validation='valid.txt.tsv',
-#     format='tsv',
-#     fields=[
-#         ('context', TEXT),
-#         ('generated', TEXT),
-#         ('gold', TEXT),
-#         ])
-# if args.p:
-#     print('Example Train data:\nContext: {}\nGold: {}\nGenerated: {}'.format(
-#         ' '.join(train[0].context), ' '.join(train[0].gold), ' '.join(train[0].generated)))
-#     print('Example Valid data:\nContext: {}\nGold: {}\nGenerated: {}'.format(
-#         ' '.join(valid[0].context), ' '.join(valid[0].gold), ' '.join(valid[0].generated)))
 
-#TEXT.build_vocab(train)
-# Read in the LM dictionary.
-#print('Building the dictionary')
-#with open(args.dic, 'rb') as dic_file:
-#    dictionary = pickle.load(dic_file)
-
-#dictionary.idx2word.insert(0,"[UNK]")
-#for item in dictionary.word2idx:
-#    dictionary.word2idx[item] += 1
-
-# Reconstruct the dictionary in torchtext.
-#counter = Counter({'[UNK]': 0, '</s>':0})
-#TEXT.vocab = vocab.Vocab(counter, specials=['[UNK]', '</s>'])
-#TEXT.vocab.itos = dictionary.idx2word
-#TEXT.vocab.stoi = defaultdict(vocab._default_unk_index, dictionary.word2idx)
-#print(TEXT.vocab.stoi["<EOL>"])
-#print(TEXT.vocab.itos[0])
-
-#TEXT.vocab.load_vectors('glove.6B.%dd' % args.embedding_dim)
-# TEXT.vocab.load_vectors('glove.6B')
 itos=None #itos = TEXT.vocab.itos if args.p else None # TODO just remove this entirely
-#print('Vocab size %d' % len(TEXT.vocab))
-
-#train_iter = data.Iterator(dataset=train, batch_size=args.batch_size,
-#        sort_key=lambda x: len(x.context), sort=True, repeat=False)
-#valid_iter = data.Iterator(dataset=valid, batch_size=args.batch_size, sort_key=lambda x: len(x.context), sort=True, repeat=False)
 
 print('Initializing the model')
 
@@ -352,17 +299,18 @@ for epoch in range(args.num_epochs):
         model.zero_grad()
         batch_size = batch["context"].size()[1]
 
-        def compute_loss(context, generated, gold):  #TODO move this
-            print(type(context), type(generated))
-            if args.cuda:
-                #print(context, generated, gold)
-                for x in [context, generated, gold]:
-                    if type(x) == tuple:
-                        x = tuple([item.cuda() for item in x])
-                    else:
-                        x = x.cuda()
+        #print(type(context), type(generated))
+        if args.cuda:
+            #print(context, generated, gold)
+            for key in batch:
+                t = batch[key]
+                if type(t) == tuple:
+                    batch[key] = tuple([item.cuda() for item in t])
+                else:
+                    batch[key] = t.cuda()
 
-            print(type(context), type(generated))
+        def compute_loss(context, generated, gold):  #TODO move this
+
             decision_negative = model(context, generated, itos=itos)
             decision_positive = model(context, gold, itos=itos)
             if args.ranking_loss or args.margin_ranking_loss:
@@ -408,11 +356,13 @@ for epoch in range(args.num_epochs):
                 #                                       autograd.Variable(torch.ones(batch_size) * i).cuda()),
                 #                                      (batch.gold[0][:gold_len, :].view(gold_len, -1),
                 #                                       autograd.Variable(torch.ones(batch_size) * i).cuda()))
+                these_labels = torch.ones(batch_size) * i
+                these_labels = these_labels.cuda() if args.cuda else these_labels
                 prefix_loss, decision = compute_loss(batch["context"],
                                                      (batch["generated"][:gen_len, :].view(gen_len, -1),
-                                                      torch.ones(batch_size) * i),
+                                                      these_labels),
                                                      (batch["gold"][:gold_len, :].view(gold_len, -1),
-                                                      torch.ones(batch_size) * i))
+                                                      these_labels))
                 loss += prefix_loss
         else:
             loss, decision = compute_loss(batch["context"], batch["generated"], batch["gold"])
