@@ -318,22 +318,23 @@ for epoch in range(args.num_epochs):
             else:
                 decision = decision_positive
 
-            x_loss = None
+            these_labels = torch.ones(batch_size)
+            these_labels = these_labels.cuda() if args.cuda else these_labels
             if args.ranking_loss:
                 x_loss = loss_function(
                   decision_positive - decision_negative,
-                  autograd.Variable(torch.ones(batch_size)))
+                  these_labels)
             elif args.margin_ranking_loss:
                 # 1: positive ranked higher than negative
                 #print(decision_positive.shape)
                 x_loss = margin_loss_function(
                   decision_positive, decision_negative,
-                  autograd.Variable(torch.ones(batch_size)))
+                  these_labels)
             else:
                 x_loss = loss_function(decision_positive,
-                  autograd.Variable(torch.ones(batch_size)))
+                  these_labels)
                 x_loss += loss_function(decision_negative,
-                  autograd.Variable(torch.zeros(batch_size)))
+                  these_labels)
 
             return x_loss, decision
 
