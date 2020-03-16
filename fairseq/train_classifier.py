@@ -47,7 +47,7 @@ class CustomIterableDataset(IterableDataset):
         file_itr = csv.DictReader(fin, delimiter='\t', fieldnames=self.fields)
         for line in file_itr:
             for field in self.fields[:-1]:
-                line[field] = self.encoder.encode(line[field])[:self.max_tokens]
+                line[field] = self.encoder.encode(line[field])[:self.max_tokens].half()
             line[self.fields[-1]] = float(line[self.fields[-1]])
             data.append(line)
         return data
@@ -190,7 +190,7 @@ bart = BARTModel.from_pretrained(
 bart.eval()
 if args.cuda:
     bart.cuda()
-    #bart.half()
+    bart.half()
 
 print("Loading Data")
 
@@ -318,7 +318,7 @@ for epoch in range(args.num_epochs):
             else:
                 decision = decision_positive
 
-            these_labels = torch.ones(batch_size)
+            these_labels = torch.ones(batch_size, dtype=torch.half)
             these_labels = these_labels.cuda() if args.cuda else these_labels
             if args.ranking_loss:
                 x_loss = loss_function(
@@ -357,7 +357,7 @@ for epoch in range(args.num_epochs):
                 #                                       autograd.Variable(torch.ones(batch_size) * i).cuda()),
                 #                                      (batch.gold[0][:gold_len, :].view(gold_len, -1),
                 #                                       autograd.Variable(torch.ones(batch_size) * i).cuda()))
-                these_labels = torch.ones(batch_size) * i
+                these_labels = torch.HalfTensor(batch_size).fill_(i)
                 these_labels = these_labels.cuda() if args.cuda else these_labels
                 prefix_loss, decision = compute_loss(batch["context"],
                                                      (batch["generated"][:gen_len, :].view(gen_len, -1),
