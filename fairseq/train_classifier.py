@@ -344,8 +344,8 @@ for epoch in range(args.num_epochs):
 
         loss = None
         if args.train_prefixes:
-            end_seq_len = max(batch["generated"].size()[0],
-                              batch["gold"].size()[0])
+            end_seq_len = max(batch["generated"].size()[1],
+                              batch["gold"].size()[1])
             loss = 0
             #length_range = chain(range(min(10, end_seq_len)),
             #                     range(10, end_seq_len, 5))
@@ -354,8 +354,8 @@ for epoch in range(args.num_epochs):
                                  iter([end_seq_len-1]))
 
             for i in length_range:
-                gen_len = min(i + 1, batch["generated"].size()[0])
-                gold_len = min(i + 1, batch["gold"].size()[0])
+                gen_len = min(i + 1, batch["generated"].size()[1])
+                gold_len = min(i + 1, batch["gold"].size()[1])
                 # prefix_loss, decision = compute_loss(batch.context[0],
                 #                                      (batch.generated[0][:gen_len, :].view(gen_len, -1),
                 #                                       autograd.Variable(torch.ones(batch_size) * i).cuda()),
@@ -363,10 +363,10 @@ for epoch in range(args.num_epochs):
                 #                                       autograd.Variable(torch.ones(batch_size) * i).cuda()))
                 these_labels = torch.HalfTensor(batch_size).fill_(i)
                 these_labels = these_labels.cuda() if args.cuda else these_labels
-                prefix_loss, decision = compute_loss(batch["context"],
-                                                     (batch["generated"][:gen_len, :].view(gen_len, -1),
+                prefix_loss, decision = compute_loss(batch["context"].transpose(0,1),
+                                                     (batch["generated"].transpose(0,1)[:gen_len, :].view(gen_len, -1),
                                                       these_labels),
-                                                     (batch["gold"][:gold_len, :].view(gold_len, -1),
+                                                     (batch["gold"].transpose(0,1)[:gold_len, :].view(gold_len, -1),
                                                       these_labels))
                 loss += prefix_loss
         else:
