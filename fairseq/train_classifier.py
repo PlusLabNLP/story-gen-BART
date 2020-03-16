@@ -214,8 +214,8 @@ print("Using {} as the training data".format(train_name))
 
 print('Reading the data')
 
-train = CustomIterableDataset(os.path.join(args.data_dir, train_name), bart, max_tokens=600)
-val = CustomIterableDataset(os.path.join(args.data_dir, valid_name), bart, max_tokens=600)
+train = CustomIterableDataset(os.path.join(args.data_dir, train_name), bart, max_tokens=200)
+val = CustomIterableDataset(os.path.join(args.data_dir, valid_name), bart, max_tokens=200)
 
 # TODO save and cache the preprocessed datasets cause that shit is slow
 train_iter = DataLoader(train, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True)
@@ -303,7 +303,7 @@ for epoch in range(args.num_epochs):
     for b, batch in enumerate(train_iter):
         model.train()
         model.zero_grad()
-        batch_size = batch["context"].size()[1]
+        batch_size = batch["context"].size()[0]
 
         #print(type(context), type(generated))
         if args.cuda:
@@ -316,16 +316,16 @@ for epoch in range(args.num_epochs):
                     batch[key] = t.cuda()
 
         def compute_loss(context, generated, gold):  #TODO move this
-
+    
             decision_negative = model(context, generated, itos=itos)
             decision_positive = model(context, gold, itos=itos)
             if args.ranking_loss or args.margin_ranking_loss:
                 decision = decision_positive - decision_negative
             else:
                 decision = decision_positive
-
+           
             pos_labels = torch.ones(batch_size, dtype=torch.half)
-            neg_labels = torch.zeroes(batch_size, dtype=torch.half)
+            neg_labels = torch.zeros(batch_size, dtype=torch.half)
             if args.cuda:
                 pos_labels = pos_labels.cuda()
                 neg_labels = neg_labels.cuda()
@@ -368,6 +368,7 @@ for epoch in range(args.num_epochs):
                 #                                       autograd.Variable(torch.ones(batch_size) * i).cuda()))
                 these_labels = torch.HalfTensor(batch_size).fill_(i)
                 these_labels = these_labels.cuda() if args.cuda else these_labels
+                # starts a seq_len, batch, then transpose to batch x seq_len
                 prefix_loss, decision = compute_loss(batch["context"].transpose(0,1),
                                                      (batch["generated"].transpose(0,1)[:gen_len, :].view(gen_len, -1),
                                                       these_labels),

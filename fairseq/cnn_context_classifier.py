@@ -47,7 +47,7 @@ class CNNContextClassifier(nn.Module):
     #             dim [batch_size or num_endings] - batch lengths).
     #   Training: num_endings = 1; decoding: batch_size = 1.
     def forward(self, context, endings, itos=None):
-
+        
         ends = endings[0]
         ends_ls = endings[1]
         cont_seq_len, batch_size = context.size()
@@ -60,7 +60,7 @@ class CNNContextClassifier(nn.Module):
             assert batch_size == end_batch_size, "Batch Size {} and End Batch Size {} do not match".format(batch_size, end_batch_size)
 
         maxpool = nn.MaxPool1d(cont_seq_len) # define layer for context length
-        #print(context.size(), end.size())
+        print(context.size(), end.size())
         embedding = self.embed_seq(context)
         context_convol = self.context_conv(embedding)
         context_pooled = maxpool(context_convol).view(batch_size, self.embedding_dim)
