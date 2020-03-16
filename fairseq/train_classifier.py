@@ -24,6 +24,7 @@ import torch.autograd as autograd
 # sys.path.insert(0, os.path.join(path, '../word_rep/'))
 
 from fairseq.models.bart import BARTModel
+from fairseq.data.data_utils import collate_tokens
 
 from cnn_context_classifier import CNNContextClassifier
 #from pool_ending_classifier import PoolEndingClassifier
@@ -41,7 +42,7 @@ class CustomIterableDataset(IterableDataset):
     def __iter__(self):
         return iter(self.data)
 
-    def preprocess(self): # TODO note that this means the max sequence length is 120
+    def preprocess(self):
         data = []
         fin = open(self.filename, newline='')
         file_itr = csv.DictReader(fin, delimiter='\t', fieldnames=self.fields)
@@ -57,6 +58,8 @@ np_str_obj_array_pattern = re.compile(r'[SaUO]')
 default_collate_err_msg_format = (
     "default_collate: batch must contain tensors, numpy arrays, numbers, "
     "dicts or lists; found {}")
+
+#def my_collate(batch):
 
 
 def my_collate(batch):
@@ -75,7 +78,8 @@ def my_collate(batch):
         #print(batch)
         #max_len = max(lambda x: x.size()[0], batch)
         #batch = pad_lengths(batch)
-        return pad_sequence(batch)
+        return collate_tokens(batch, pad_idx=1)
+        #return pad_sequence(batch)
         #return torch.stack(batch, 0, out=out)
     elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' \
             and elem_type.__name__ != 'string_':
@@ -89,7 +93,7 @@ def my_collate(batch):
         elif elem.shape == ():  # scalars
             return torch.as_tensor(batch)
     elif isinstance(elem, float):
-        return torch.tensor(batch, dtype=torch.float64)
+        return torch.tensor(batch, dtype=torch.half)
     elif isinstance(elem, int_classes):
         return torch.tensor(batch)
     elif isinstance(elem, string_classes):

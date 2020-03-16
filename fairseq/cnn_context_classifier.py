@@ -32,9 +32,12 @@ class CNNContextClassifier(nn.Module):
         self.drop = nn.Dropout(dropout_rate)
 
 
+    # vec is seq_len x batch so transpose before iterating over
     def embed_seq(self, vec): # todo make sure this makes sense in BART world
-        vec1 = self.word_embeds(vec.transpose(0, 1).contiguous())
-        vec_tr = vec1.transpose(1, 2).contiguous()	
+        # currently bart doesn't let you batch extract features - trying to sort out
+        all_embeddings = torch.stack([self.word_embeds(tok_list).squeeze(0)
+                                      for tok_list in vec.transpose(0, 1)]) # results in batch x seq_len x embedsize
+        vec_tr = all_embeddings.transpose(1, 2).contiguous()
         return vec_tr # dim [batch_size, embed_dim, length]
 
     # Input dimensions: 
