@@ -30,6 +30,8 @@ from cnn_context_classifier import CNNContextClassifier
 #from pool_ending_classifier import PoolEndingClassifier
 #from reprnn import RepRNN
 
+os.environ['CUDA_VISIBLE_DEVICES']="3"
+
 class CustomIterableDataset(IterableDataset):
 
     def __init__(self, filename, encoder, max_tokens=1024):
@@ -48,7 +50,7 @@ class CustomIterableDataset(IterableDataset):
         file_itr = csv.DictReader(fin, delimiter='\t', fieldnames=self.fields)
         for line in file_itr:
             for field in self.fields[:-1]:
-                line[field] = self.encoder.encode(line[field])[:self.max_tokens].half()
+                line[field] = self.encoder.encode(line[field])[:self.max_tokens]
             line[self.fields[-1]] = float(line[self.fields[-1]])
             data.append(line)
         return data
@@ -79,7 +81,7 @@ def my_collate(batch):
         #max_len = max(lambda x: x.size()[0], batch)
         #batch = pad_lengths(batch)
         return collate_tokens(batch, pad_idx=1)
-        #return pad_sequence(batch)
+        #return pad_sequence(batch, padding_value=1)
         #return torch.stack(batch, 0, out=out)
     elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' \
             and elem_type.__name__ != 'string_':
@@ -193,8 +195,8 @@ bart = BARTModel.from_pretrained(
 )
 bart.eval()
 if args.cuda:
-    bart.cuda()
     bart.half()
+    bart.cuda()
 
 print("Loading Data")
 
@@ -322,23 +324,26 @@ for epoch in range(args.num_epochs):
             else:
                 decision = decision_positive
 
-            these_labels = torch.ones(batch_size, dtype=torch.half)
-            these_labels = these_labels.cuda() if args.cuda else these_labels
+            pos_labels = torch.ones(batch_size, dtype=torch.half)
+            neg_labels = torch.zeroes(batch_size, dtype=torch.half)
+            if args.cuda:
+                pos_labels = pos_labels.cuda()
+                neg_labels = neg_labels.cuda()
             if args.ranking_loss:
                 x_loss = loss_function(
                   decision_positive - decision_negative,
-                  these_labels)
+                  pos_labels)
             elif args.margin_ranking_loss:
                 # 1: positive ranked higher than negative
                 #print(decision_positive.shape)
                 x_loss = margin_loss_function(
                   decision_positive, decision_negative,
-                  these_labels)
+                  pos_labels)
             else:
                 x_loss = loss_function(decision_positive,
-                  these_labels)
+                  pos_labels)
                 x_loss += loss_function(decision_negative,
-                  these_labels)
+                                        neg_labels)
 
             return x_loss, decision
 

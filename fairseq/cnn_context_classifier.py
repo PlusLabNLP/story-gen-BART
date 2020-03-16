@@ -22,14 +22,14 @@ class CNNContextClassifier(nn.Module):
         
         self.context_conv = nn.Conv1d(self.embedding_dim, self.embedding_dim, 
           filter_size, stride=1, padding=int((filter_size-1)/2), 
-          groups=self.embedding_dim) # else groups=1
+          groups=self.embedding_dim).half() # else groups=1
 
         self.ending_conv = nn.Conv1d(self.embedding_dim, self.embedding_dim, 
           filter_size, stride=1, padding=int((filter_size-1)/2), 
-          groups=self.embedding_dim) # else groups=1
+          groups=self.embedding_dim).half() # else groups=1
 
-        self.fc = nn.Linear(self.embedding_dim, 1)
-        self.drop = nn.Dropout(dropout_rate)
+        self.fc = nn.Linear(self.embedding_dim, 1).half()
+        self.drop = nn.Dropout(dropout_rate).half()
 
 
     # vec is seq_len x batch so transpose before iterating over
@@ -57,11 +57,12 @@ class CNNContextClassifier(nn.Module):
         end_batch_size = end.size()[1]
         decode_mode = (batch_size == 1 and end_batch_size > 1)
         if not decode_mode:
-            assert batch_size == end_batch_size
+            assert batch_size == end_batch_size, "Batch Size {} and End Batch Size {} do not match".format(batch_size, end_batch_size)
 
         maxpool = nn.MaxPool1d(cont_seq_len) # define layer for context length
-        print(context.size(), end.size())
-        context_convol = self.context_conv(self.embed_seq(context))
+        #print(context.size(), end.size())
+        embedding = self.embed_seq(context)
+        context_convol = self.context_conv(embedding)
         context_pooled = maxpool(context_convol).view(batch_size, self.embedding_dim)
          
         maxpool_end = nn.MaxPool1d(end_seq_len)
