@@ -110,6 +110,38 @@ def my_collate(batch):
 
     raise TypeError(default_collate_err_msg_format.format(elem_type))
 
+
+def validation_loss(model, valid_iter, ranking_loss, margin_ranking_loss):
+    model.eval()
+    #valid_iter.init_epoch()
+    v_correct, v_total = 0, 0
+    ones = 0
+    for k, batch in enumerate(valid_iter):
+        #if k % 100 == 0:
+        #    print(k)
+        b_size = batch["context"].size()[0]
+
+        decision_negative = model(batch["context"].transpose(0,1),
+                                  batch["generated"].transpose(0,1))
+        decision_positive = model(batch["context"].transpose(0,1),
+                                  batch["gold"].transpose(0,1))
+
+        if ranking_loss or margin_ranking_loss:
+            dec = decision_positive - decision_negative
+        else:
+            # Evaluate predictions on gold
+            dec = decision_positive
+
+        decis = dec.data.cpu().numpy()
+        predicts = np.round(expit(decis))
+        v_correct += np.sum(np.equal(predicts, np.ones(batch_size)))
+        v_total += batch_size
+        ones += np.sum(predicts)
+    valid_acc = v_correct / v_total
+    print('Valid: %f' % valid_acc)
+    print('%d ones %d zeros' % (ones, v_total - ones))
+    return valid_acc
+
 parser = argparse.ArgumentParser()
 # Data
 parser.add_argument('data_dir', type=str, help='path to data directory')
@@ -262,33 +294,7 @@ else:
 
 if args.load_model != '':
     print('Evaluating model')
-    model.eval()
-    #valid_iter.init_epoch()
-    v_correct, v_total = 0, 0
-    ones = 0
-    for k, batch in enumerate(valid_iter):
-        #if k % 100 == 0:
-        #    print(k)
-        batch_size = batch.context[0].size()[1]
-
-        decision_negative = model(batch.context[0],
-            batch.generated, itos=itos)
-        decision_positive = model(batch.context[0],
-            batch.gold, itos=itos)
-
-        if args.ranking_loss or args.margin_ranking_loss:
-            decision = decision_positive - decision_negative
-        else:
-            # Evaluate predictions on gold
-            decision = decision_positive
-
-        decis = decision.data.cpu().numpy()
-        predicts = np.round(expit(decis))
-        v_correct += np.sum(np.equal(predicts, np.ones(batch_size)))
-        v_total += batch_size
-        ones += np.sum(predicts)
-    print('Valid: %f' % (v_correct / v_total))
-    print('%d ones %d zeros' % (ones, v_total - ones))
+    val_accuracy = validation_loss(model, valid_iter, args.ranking_loss, args.margin_ranking_loss)
 
 
 early_stop = False
@@ -300,6 +306,7 @@ for epoch in range(args.num_epochs):
     #train_iter.init_epoch()
     correct, total = 0, 0
     total_loss = 0
+    # Everything is loaded in Batch first x seq len by DataLoader, but then later transposed for the Classifier forward function
     for b, batch in enumerate(train_iter):
         model.train()
         model.zero_grad()
@@ -389,65 +396,7 @@ for epoch in range(args.num_epochs):
         total += batch_size
 
         if b % args.valid_every == 0:
-            model.eval()
-            #valid_iter.init_epoch()
-            v_correct, v_total = 0, 0
-            ones = 0
-            for k, batch in enumerate(valid_iter):
-                #if k % 100 == 0:
-                #    print(k)
-                # batch_size = batch.context[0].size()[1]
-                #
-                # decision_negative = model(batch.context[0],
-                #     batch.generated, itos=itos)
-                # decision_positive = model(batch.context[0],
-                #     batch.gold, itos=itos)
-                batch_size = batch["context"].size()[1]
-
-                # bg = batch.generated
-                # item = torch.cat(bg, dim=-1).to('cuda')
-                # batch.generated = torch.chunk(item, chunks=2, dim=-1)
-
-                temp = []
-
-                for bg_item in batch["generated"]:
-                    temp.append( bg_item)
-                    batch["generated"] = tuple(temp)
-
-                temp2 = []
-                for bg_item in batch["gold"]:
-                    if bg_item is not None:
-                        temp2.append(bg_item)
-                batch.gold = tuple(temp2)
-
-
-
-                # print("bacth generated", batch.generated)
-                #
-                # for item in batch.generated:
-                #     print("batch generated item: ", item)
-
-
-                decision_negative = model(batch["context"],
-                                          batch["generated"], itos=itos)
-                decision_positive = model(batch["context"],
-                                          batch["gold"], itos=itos)
-
-                if args.ranking_loss or args.margin_ranking_loss:
-                    decision = decision_positive - decision_negative
-                else:
-                    # Evaluate predictions on gold
-                    decision = decision_positive
-
-                decis = decision.data.cpu().numpy()
-                predicts = np.round(expit(decis))
-                v_correct += np.sum(np.equal(predicts, np.ones(batch_size)))
-                v_total += batch_size
-                ones += np.sum(predicts)
-            valid_accuracy = v_correct / v_total
-            print('Valid: %f' % (valid_accuracy))
-            print('%d ones %d zeros' % (ones, v_total - ones))
-
+            valid_accuracy = validation_loss(model, valid_iter, args.ranking_loss, args.margin_ranking_loss)
             if epoch > 1 and valid_accuracy > best_accuracy:  # to prevent getting the best by chance early in training and never saving again
                 best_accuracy = valid_accuracy
                 print('Saving model')
