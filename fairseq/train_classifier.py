@@ -111,12 +111,21 @@ def my_collate(batch):
     raise TypeError(default_collate_err_msg_format.format(elem_type))
 
 
-def validation_loss(model, valid_iter, ranking_loss, margin_ranking_loss):
+def validation_loss(model, valid_iter, ranking_loss, margin_ranking_loss, cuda):
     model.eval()
     #valid_iter.init_epoch()
     v_correct, v_total = 0, 0
     ones = 0
     for k, batch in enumerate(valid_iter):
+        if cuda:
+            #print(context, generated, gold)
+            for key in batch:
+                t = batch[key]
+                if type(t) == tuple:
+                    batch[key] = tuple([item.cuda() for item in t])
+                else:
+                    batch[key] = t.cuda()
+
         #if k % 100 == 0:
         #    print(k)
         b_size = batch["context"].size()[0]
@@ -294,7 +303,8 @@ else:
 
 if args.load_model != '':
     print('Evaluating model')
-    val_accuracy = validation_loss(model, valid_iter, args.ranking_loss, args.margin_ranking_loss)
+    val_accuracy = validation_loss(model, valid_iter, args.ranking_loss, args.margin_ranking_loss,
+                                   args.cuda)
 
 
 early_stop = False
@@ -396,7 +406,8 @@ for epoch in range(args.num_epochs):
         total += batch_size
 
         if b % args.valid_every == 0:
-            valid_accuracy = validation_loss(model, valid_iter, args.ranking_loss, args.margin_ranking_loss)
+            valid_accuracy = validation_loss(model, valid_iter, args.ranking_loss,
+                                             args.margin_ranking_loss, args.cuda)
             if epoch > 1 and valid_accuracy > best_accuracy:  # to prevent getting the best by chance early in training and never saving again
                 best_accuracy = valid_accuracy
                 print('Saving model')
