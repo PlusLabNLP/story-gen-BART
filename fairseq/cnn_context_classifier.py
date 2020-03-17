@@ -48,8 +48,12 @@ class CNNContextClassifier(nn.Module):
     #   Training: num_endings = 1; decoding: batch_size = 1.
     def forward(self, context, endings, itos=None):
         
-        ends = endings[0]
-        ends_ls = endings[1]
+        if type(endings) == tuple: # this is a because sometimes we need tuples for other classifiers, and share a dataloader
+            ends = endings[0]
+            ends_ls = endings[1]
+        else:
+            ends = endings
+
         cont_seq_len, batch_size = context.size()
 
         end_seq_len = ends.size()[0]

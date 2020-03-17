@@ -134,8 +134,8 @@ def validation_loss(model, valid_iter, ranking_loss, margin_ranking_loss):
 
         decis = dec.data.cpu().numpy()
         predicts = np.round(expit(decis))
-        v_correct += np.sum(np.equal(predicts, np.ones(batch_size)))
-        v_total += batch_size
+        v_correct += np.sum(np.equal(predicts, np.ones(b_size)))
+        v_total += b_size
         ones += np.sum(predicts)
     valid_acc = v_correct / v_total
     print('Valid: %f' % valid_acc)
