@@ -5,7 +5,7 @@ import numpy as np
 from collections import Counter
 from collections import defaultdict
 from itertools import chain
-
+from datetime import datetime
 
 from scipy.special import expit
 import torch
@@ -24,13 +24,15 @@ import torch.autograd as autograd
 # sys.path.insert(0, os.path.join(path, '../word_rep/'))
 
 from fairseq.models.bart import BARTModel
-from fairseq.data.data_utils import collate_tokens
+from fairseq.data.data_utils import collate_tokens, Corpus
+
 
 from cnn_context_classifier import CNNContextClassifier
 #from pool_ending_classifier import PoolEndingClassifier
 #from reprnn import RepRNN
 
-os.environ['CUDA_VISIBLE_DEVICES']="3"
+os.environ['CUDA_VISIBLE_DEVICES']="1"
+
 
 class CustomIterableDataset(IterableDataset):
 
@@ -156,8 +158,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('data_dir', type=str, help='path to data directory')
 parser.add_argument('--save_to', type=str, default='', help='path to save model to')
 parser.add_argument('--load_model', type=str, default='', help='existing model file to load')
-parser.add_argument('--dic', type=str, default='dic.pickle',
-                    help='lm dic to use as vocabulary')
+parser.add_argument('--load_corpus', type=str, help='existing processed corpus to load')
+parser.add_argument('--max_seq_len', type=int, default=200, help='max tokens to truncate data to for training')
+
 # Model
 parser.add_argument('--decider_type', type=str, default='cnncontext',
                     help='Decider classifier type [cnncontext, poolending, reprnn]')
@@ -242,27 +245,34 @@ if args.cuda:
 print("Loading Data")
 
 
-valid_name = 'valid.txt.tiny.tsv'
+valid_name = 'valid.txt.tsv'
 if args.valid_only:
     train_name = valid_name
 else:
     if args.event_type:
         train_name = 'disc_train.txt.' + args.event_type + '.tsv'
     else:
-        train_name = 'disc_train.txt.tiny.tsv'
+        train_name = 'disc_train.txt.tsv'
 
 print("Using {} as the training data".format(train_name))
 
-print('Reading the data')
+if not args.load_corpus:
+    print('Reading the data')
 
-train = CustomIterableDataset(os.path.join(args.data_dir, train_name), bart, max_tokens=200)
-val = CustomIterableDataset(os.path.join(args.data_dir, valid_name), bart, max_tokens=200)
+    train = CustomIterableDataset(os.path.join(args.data_dir, train_name), bart, max_tokens=args.max_seq_len)
+    val = CustomIterableDataset(os.path.join(args.data_dir, valid_name), bart, max_tokens=args.max_seq_len)    
+    #corpus = Corpus(train, val)
+    #save_name = "corpus.{}.data".format("_".join(str(datetime.now()).split()))
+    #torch.save(corpus, save_name)
 
-# TODO save and cache the preprocessed datasets cause that shit is slow
-train_iter = DataLoader(train, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True)
-valid_iter = DataLoader(val, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True)
 
+else:
+    print('Loading in preprocessed corpus: {}'.format(args.load_corpus))
+    corpus = torch.load(args.load_corpus)
+    train, val = corpus.train, corpus.val
 
+train_iter = DataLoader(train, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True)                                                                      
+valid_iter = DataLoader(val, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True) 
 
 itos=None #itos = TEXT.vocab.itos if args.p else None # TODO just remove this entirely
 
