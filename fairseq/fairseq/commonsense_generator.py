@@ -13,10 +13,10 @@ def convert_to_word(tgt_dict,s,gpt_encoder):
 	tokens = [int(tok) if tok not in {'<unk>', '<mask>'} else tok for tok in converted.split()]
 	converted = gpt_encoder.decode(tokens)
 	print("converted is",converted)
-	for sym in ['<A0>','<A1>','<A2>','<V>','</s>','<EOT>','<EOL>','ent']:
+	for sym in ['<A0>','<A1>','<A2>','<V>','</s>','<EOT>','<EOL>','#','ent']:
 		converted = converted.replace(sym,'')
 	for w in converted.split():
-		if w.isdigit():
+		if isdigit(w):
 			converted = converted.replace(w,'')
 	word = ""
 	prev = None
@@ -33,9 +33,20 @@ def convert_to_word(tgt_dict,s,gpt_encoder):
 	return converted
 
 
+
 def generate_next_word(tgt_dict, tokens, model, sampler,data_loader,text_encoder,gpt_encoder):
 	
 	y = tokens.tolist()
+	count = 0
 	for a in y:
 		word = convert_to_word(tgt_dict,a,gpt_encoder)
-		print("word is",word,"-end")
+		if word.count('#')==count+1:
+			prefix = word.split('#')[-1]
+			if prefix!=prev:
+				next_word = generate_conceptnet.generate(prefix,model,sampler,data_loader,text_encoder)
+				print("next_words are",next_word)
+				prev = prefix
+			count = count+1
+
+
+
