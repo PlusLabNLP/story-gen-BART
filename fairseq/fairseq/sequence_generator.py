@@ -4,10 +4,10 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
-
+from fairseq import commonsense_generator
 import torch
-
-from fairseq import search, utils
+from fairseq import search
+from fairseq import utils1 as utils
 from fairseq.data import data_utils
 from fairseq.models import FairseqIncrementalDecoder
 
@@ -57,7 +57,7 @@ class SequenceGenerator(object):
         self.eos = tgt_dict.eos()
         self.vocab_size = len(tgt_dict)
         self.beam_size = beam_size
-        # the max beam size is the dictionary size - 1, since we never select pad
+        self.tgt_dict = tgt_dict
         self.beam_size = min(beam_size, self.vocab_size - 1)
         self.max_len_a = max_len_a
         self.max_len_b = max_len_b
@@ -110,6 +110,8 @@ class SequenceGenerator(object):
             if k != 'prev_output_tokens'
         }
 
+        print("Encoder input", encoder_input)
+
         src_tokens = encoder_input['src_tokens']
         src_lengths = (src_tokens.ne(self.eos) & src_tokens.ne(self.pad)).long().sum(dim=1)
         input_size = src_tokens.size()
@@ -117,6 +119,12 @@ class SequenceGenerator(object):
         bsz = input_size[0]
         src_len = input_size[1]
         beam_size = self.beam_size
+        print("input_size", input_size)
+        print("batch_size", bsz)
+        print("src_len",src_len)
+        print("beam_size",beam_size)
+
+        model_c , sampler_c , data_loader_c, text_encoder_c,gpt_encoder_c = commonsense_generator.initialize()
 
         if self.match_source_len:
             max_len = src_lengths.max().item()
@@ -130,9 +138,12 @@ class SequenceGenerator(object):
 
         # compute the encoder output for each beam
         encoder_outs = model.forward_encoder(encoder_input)
+        print("encoder_outs prev",encoder_outs)
         new_order = torch.arange(bsz).view(-1, 1).repeat(1, beam_size).view(-1)
         new_order = new_order.to(src_tokens.device).long()
         encoder_outs = model.reorder_encoder_out(encoder_outs, new_order)
+        print("encoder_outs now",encoder_outs)
+
 
         # initialize buffers
         scores = src_tokens.new(bsz * beam_size, max_len + 1).float().fill_(0)
@@ -141,6 +152,8 @@ class SequenceGenerator(object):
         tokens_buf = tokens.clone()
         tokens[:, 0] = self.eos if bos_token is None else bos_token
         attn, attn_buf = None, None
+
+        #print("scores and token size",scores.size(),token.size())
 
         # The blacklist indicates candidates that should be ignored.
         # For example, suppose we're sampling and have already finalized 2/5
@@ -195,6 +208,8 @@ class SequenceGenerator(object):
                 eos_scores: A vector of the same size as bbsz_idx containing
                     scores for each hypothesis
             """
+            print("step is",step)
+            print("bbsz_idx is",bbsz_idx)
             assert bbsz_idx.numel() == eos_scores.numel()
 
             # clone relevant token and attention tensors
@@ -206,9 +221,12 @@ class SequenceGenerator(object):
 
             # compute scores per token position
             pos_scores = scores.index_select(0, bbsz_idx)[:, :step+1]
+            print("pos_scores1",pos_scores,pos_scores.size())
             pos_scores[:, step] = eos_scores
+            print("pos_scores2",pos_scores,pos_scores.size())
             # convert from cumulative to per-position scores
             pos_scores[:, 1:] = pos_scores[:, 1:] - pos_scores[:, :-1]
+            print("pos_scores3",pos_scores,pos_scores.size())
 
             # normalize sentence-level scores
             if self.normalize_scores:
@@ -221,6 +239,7 @@ class SequenceGenerator(object):
                     prev += 1
                 else:
                     cum_unfin.append(prev)
+            print("cum_unfin",cum_unfin)
 
             sents_seen = set()
             for i, (idx, score) in enumerate(zip(bbsz_idx.tolist(), eos_scores.tolist())):
@@ -249,7 +268,9 @@ class SequenceGenerator(object):
                     }
 
                 if len(finalized[sent]) < beam_size:
-                    finalized[sent].append(get_hypo())
+                    tuhin = get_hypo()
+                    print(tuhin)
+                    finalized[sent].append(tuhin)
 
             newly_finished = []
             for sent, unfin_idx in sents_seen:
@@ -258,6 +279,8 @@ class SequenceGenerator(object):
                     finished[sent] = True
                     newly_finished.append(unfin_idx)
             return newly_finished
+
+
 
         reorder_state = None
         batch_idxs = None
@@ -271,10 +294,19 @@ class SequenceGenerator(object):
                 model.reorder_incremental_state(reorder_state)
                 encoder_outs = model.reorder_encoder_out(encoder_outs, reorder_state)
 
+            print("step",step)
+            print("tokens",tokens[:, :step + 1],tokens[:, :step + 1].size())
+            commonsense_generator.generate_next_word(self.tgt_dict, tokens[:, :step + 1], model_c, sampler_c,data_loader_c,text_encoder_c
+                ,gpt_encoder_c)
+
+            print("encoder_outs",encoder_outs)
+
             lprobs, avg_attn_scores = model.forward_decoder(
                 tokens[:, :step + 1], encoder_outs, temperature=self.temperature,
             )
-            lprobs[lprobs != lprobs] = -math.inf
+
+            
+            print("logprobs",lprobs,lprobs.size())
 
             lprobs[:, self.pad] = -math.inf  # never select pad
             lprobs[:, self.unk] -= self.unk_penalty  # apply unk penalty
@@ -326,8 +358,6 @@ class SequenceGenerator(object):
                                 gen_ngrams[bbsz_idx].get(tuple(ngram[:-1]), []) + [ngram[-1]]
 
             # Record attention scores
-            if type(avg_attn_scores) is list:
-                avg_attn_scores = avg_attn_scores[0]
             if avg_attn_scores is not None:
                 if attn is None:
                     attn = scores.new(bsz * beam_size, src_tokens.size(1), max_len + 2)
@@ -361,6 +391,9 @@ class SequenceGenerator(object):
                 lprobs.view(bsz, -1, self.vocab_size),
                 scores.view(bsz, beam_size, -1)[:, :, :step],
             )
+            print("cand_scores",cand_scores,cand_scores.size())
+            print("cand_indices",cand_indices,cand_indices.size())
+            print("cand_beams",cand_beams,cand_beams.size())
 
             # cand_bbsz_idx contains beam indices for the top candidate
             # hypotheses, with a range of values: [0, bsz*beam_size),
@@ -574,8 +607,6 @@ class EnsembleModel(torch.nn.Module):
         attn = decoder_out[1]
         if type(attn) is dict:
             attn = attn.get('attn', None)
-        if type(attn) is list:
-            attn = attn[0]
         if attn is not None:
             attn = attn[:, -1, :]
         probs = model.get_normalized_probs(decoder_out, log_probs=log_probs)
@@ -691,8 +722,6 @@ class EnsembleModelWithAlignment(EnsembleModel):
         attn = decoder_out[1]
         if type(attn) is dict:
             attn = attn.get('attn', None)
-        if type(attn) is list:
-            attn = attn[0]
         if attn is not None:
             attn = attn[:, -1, :]
         probs = model.get_normalized_probs(decoder_out, log_probs=log_probs)
