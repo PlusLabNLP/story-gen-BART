@@ -36,12 +36,15 @@ os.environ['CUDA_VISIBLE_DEVICES']="1"
 
 class CustomIterableDataset(IterableDataset):
 
-    def __init__(self, filename, encoder, max_tokens=1024):
+    def __init__(self, filename, encoder, max_tokens=1024, saved_data=None):
         self.filename = filename
         self.fields = ["context", "generated", "gold", "label"]
         self.encoder = encoder
         self.max_tokens = max_tokens
-        self.data = self.preprocess()
+        if not saved_data:
+            self.data = self.preprocess()
+        else:
+            self.data = saved_data
 
     def __iter__(self):
         return iter(self.data)
@@ -261,15 +264,16 @@ if not args.load_corpus:
 
     train = CustomIterableDataset(os.path.join(args.data_dir, train_name), bart, max_tokens=args.max_seq_len)
     val = CustomIterableDataset(os.path.join(args.data_dir, valid_name), bart, max_tokens=args.max_seq_len)    
-    #corpus = Corpus(train, val)
-    #save_name = "corpus.{}.data".format("_".join(str(datetime.now()).split()))
-    #torch.save(corpus, save_name)
+    corpus = Corpus(train, val, args.max_seq_len)
+    save_name = "corpus.{}.data".format("_".join(str(datetime.now()).split()))
+    torch.save(corpus, save_name)
 
 
 else:
     print('Loading in preprocessed corpus: {}'.format(args.load_corpus))
     corpus = torch.load(args.load_corpus)
-    train, val = corpus.train, corpus.val
+    train = CustomIterableDataset(corpus.train_name, None, max_tokens=corpus.max_seq_len, saved_data=corpus.train)
+    val = CustomIterableDataset(corpus.val_name, None, max_tokens=corpus.max_seq_len, saved_data=corpus.val)
 
 train_iter = DataLoader(train, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True)                                                                      
 valid_iter = DataLoader(val, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True) 
