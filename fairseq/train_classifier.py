@@ -254,6 +254,7 @@ if args.valid_only:
 else:
     if args.event_type:
         train_name = 'disc_train.txt.' + args.event_type + '.tsv'
+        valid_name = 'valid.txt.' + args.event_type + '.tsv'
     else:
         train_name = 'disc_train.txt.tsv'
 
@@ -265,7 +266,7 @@ if not args.load_corpus:
     train = CustomIterableDataset(os.path.join(args.data_dir, train_name), bart, max_tokens=args.max_seq_len)
     val = CustomIterableDataset(os.path.join(args.data_dir, valid_name), bart, max_tokens=args.max_seq_len)    
     corpus = Corpus(train, val, args.max_seq_len)
-    save_name = "corpus.{}.data".format("_".join(str(datetime.now()).split()))
+    save_name = "corpus.{}.{}.data".format("_".join(args.data_dir.split("/")), "_".join(str(datetime.now()).split()))
     torch.save(corpus, save_name)
 
 
