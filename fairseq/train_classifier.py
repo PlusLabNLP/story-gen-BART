@@ -31,7 +31,7 @@ from cnn_context_classifier import CNNContextClassifier
 #from pool_ending_classifier import PoolEndingClassifier
 #from reprnn import RepRNN
 
-os.environ['CUDA_VISIBLE_DEVICES']="1"
+os.environ['CUDA_VISIBLE_DEVICES']="3"
 
 
 class CustomIterableDataset(IterableDataset):
@@ -408,8 +408,8 @@ for epoch in range(args.num_epochs):
                                                       these_labels))
                 loss += prefix_loss
         else:
-            loss, decision = compute_loss(batch["context"], batch["generated"], batch["gold"])
-
+            loss, decision = compute_loss(batch["context"].transpose(0,1), batch["generated"].transpose(0,1), batch["gold"].transpose(0,1))
+        #breakpoint()
         loss.backward()
         # print(loss)
         total_loss += loss.data.item()
