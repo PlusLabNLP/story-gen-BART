@@ -6,6 +6,7 @@ from collections import Counter
 from collections import defaultdict
 from itertools import chain
 from datetime import datetime
+import time
 
 from scipy.special import expit
 import torch
@@ -31,7 +32,7 @@ from cnn_context_classifier import CNNContextClassifier
 #from pool_ending_classifier import PoolEndingClassifier
 #from reprnn import RepRNN
 
-os.environ['CUDA_VISIBLE_DEVICES']="3"
+os.environ['CUDA_VISIBLE_DEVICES']="2"
 
 
 class CustomIterableDataset(IterableDataset):
@@ -49,6 +50,9 @@ class CustomIterableDataset(IterableDataset):
     def __iter__(self):
         return iter(self.data)
 
+    def __len__(self):
+        return len(self.data)
+        
     def preprocess(self):
         data = []
         fin = open(self.filename, newline='')
@@ -276,6 +280,8 @@ else:
     train = CustomIterableDataset(corpus.train_name, None, max_tokens=corpus.max_seq_len, saved_data=corpus.train)
     val = CustomIterableDataset(corpus.val_name, None, max_tokens=corpus.max_seq_len, saved_data=corpus.val)
 
+num_batch = int(len(train)/args.batch_size)
+
 train_iter = DataLoader(train, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True)                                                                      
 valid_iter = DataLoader(val, batch_size=args.batch_size, collate_fn=my_collate) #, shuffle=True) 
 
@@ -283,13 +289,8 @@ itos=None #itos = TEXT.vocab.itos if args.p else None # TODO just remove this en
 
 print('Initializing the model')
 
-if args.load_model != '':
-    with open(args.load_model, 'rb') as f:
-        model = torch.load(f)
-
-elif args.decider_type == 'cnncontext':
+if args.decider_type == 'cnncontext':
     model = CNNContextClassifier( args.hidden_dim, args.filter_size, args.dropout_rate, bart)
-
 
 # Have not implemented these in BART yet
 # elif args.decider_type == 'poolending':
@@ -303,6 +304,9 @@ elif args.decider_type == 'cnncontext':
 #             embed_mat=TEXT.vocab.vectors).cuda()
 else:
   assert False, 'Invalid model type.'
+
+if args.load_model != '':
+    model.load_state_dict(torch.load(args.load_model))
 
 if args.cuda:
     model = model.cuda()
@@ -324,13 +328,16 @@ if args.load_model != '':
 
 early_stop = False
 best_accuracy = 0
+print('{} batches per epoch, {} times validation is run per epoch'.format(num_batch, int(num_batch/args.valid_every)))
 for epoch in range(args.num_epochs):
     if early_stop:
+        print('Early stopping to prevent overfitting')
         break
     print('Starting epoch %d' % epoch)
     #train_iter.init_epoch()
     correct, total = 0, 0
     total_loss = 0
+    start_time = time.time()
     # Everything is loaded in Batch first x seq len by DataLoader, but then later transposed for the Classifier forward function
     for b, batch in enumerate(train_iter):
         model.train()
@@ -421,18 +428,21 @@ for epoch in range(args.num_epochs):
         total += batch_size
 
         if b % args.valid_every == 0:
+            val_start_time = time.time()
             valid_accuracy = validation_loss(model, valid_iter, args.ranking_loss,
                                              args.margin_ranking_loss, args.cuda)
-            if epoch > 1 and valid_accuracy > best_accuracy:  # to prevent getting the best by chance early in training and never saving again
+            if epoch > 0 and valid_accuracy > best_accuracy:  # to prevent getting the best by chance early in training and never saving again
                 best_accuracy = valid_accuracy
                 print('Saving model')
                 with open(args.save_to, 'wb') as f:
-                    torch.save(model, f)
-
+                    torch.save(model.state_dict(), f)
+            elapsed = (time.time() - val_start_time)
+            print('Seconds to test validation: {:.2f}'.format(elapsed))
             if valid_accuracy > args.stop_threshold: # early stopping
                 early_stop = True
                 break
-
+    elapsed = (time.time() - start_time)
     print('Train: %f' % (correct / total))
     print('Loss: %f' % (total_loss / total))
+    print('Seconds per epoch: {:.2f}'.format(elapsed))
 
