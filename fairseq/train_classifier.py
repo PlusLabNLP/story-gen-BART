@@ -242,7 +242,7 @@ print('Loading BART')
 bart = BARTModel.from_pretrained(
     'checkpoint/',
     checkpoint_file='checkpoint_best.pt',
-    data_name_or_path='temp'
+    data_name_or_path='full'
 )
 bart.eval()
 if args.cuda:
@@ -252,15 +252,15 @@ if args.cuda:
 print("Loading Data")
 
 
-valid_name = 'valid.txt.tsv'
+valid_name = 'valid.txt.title+plot.tsv'
 if args.valid_only:
     train_name = valid_name
 else:
     if args.event_type:
-        train_name = 'disc_train.txt.' + args.event_type + '.tsv'
-        valid_name = 'valid.txt.' + args.event_type + '.tsv'
+        train_name = 'disc_train.txt.title+plot.' + args.event_type + '.tsv'
+        valid_name = 'valid.txt.title+plot.' + args.event_type + '.tsv'
     else:
-        train_name = 'disc_train.txt.tsv'
+        train_name = 'disc_train.txt.title+plot.tsv'
 
 print("Using {} as the training data".format(train_name))
 
@@ -320,10 +320,10 @@ if args.adam:
 else:
     optimizer = optim.SGD(parameters, lr=args.lr)
 
-if args.load_model != '':
-    print('Evaluating model')
-    val_accuracy = validation_loss(model, valid_iter, args.ranking_loss, args.margin_ranking_loss,
-                                   args.cuda)
+#if args.load_model != '':
+#    print('Evaluating model')
+#    val_accuracy = validation_loss(model, valid_iter, args.ranking_loss, args.margin_ranking_loss,
+#                                   args.cuda)
 
 
 early_stop = False
