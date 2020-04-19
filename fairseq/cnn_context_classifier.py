@@ -3,21 +3,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd as autograd
 import pdb
+import copy
 
 class CNNContextClassifier(nn.Module):
 
     def __init__(self, hidden_dim,
-                 filter_size, dropout_rate, bart, fix_embeddings=False):
+                 filter_size, dropout_rate, bart=None, fix_embeddings=False):
         super(CNNContextClassifier, self).__init__()
 
-        self.vocab_size = bart.model.encoder.embed_tokens.num_embeddings
-        self.embedding_dim = bart.model.encoder.embed_tokens.embedding_dim
+        self.vocab_size = copy.deepcopy(bart.model.encoder.embed_tokens.num_embeddings)
+        self.embedding_dim = copy.deepcopy(bart.model.encoder.embed_tokens.embedding_dim)
         self.hidden_dim = hidden_dim
 
         self.word_embeds = bart.extract_features 
         #vocab_size = 50264
-        #self.word_embeds = nn.Embedding(vocab_size, self.embedding_dim).half()
-        self.use_cuda = next(bart.parameters()).is_cuda
+        #self.word_embeds = nn.Embedding(self.vocab_size, self.embedding_dim).half()
+        self.use_cuda = copy.deepcopy(next(bart.parameters()).is_cuda)
         # if embed_mat is not None:
         #     self.word_embeds.weight.data = embed_mat
         #     if fix_embeddings:
