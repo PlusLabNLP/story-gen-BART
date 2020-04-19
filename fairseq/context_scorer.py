@@ -3,17 +3,16 @@ import pickle
 
 import torch 
 import torch.autograd as autograd
-#from .cnn_context_classifier import *
 
 class ContextScorer():
     """build a scorer from a pretrained classifier"""
-    def __init__(self, model_path, use_cuda=True):
-        with open(model_path, 'rb') as f:
-            self.model = torch.load(f, map_location=lambda storage, loc: storage)
-            if use_cuda:
-                self.model.cuda()
-            else:
-                self.model.cpu()
+    def __init__(self, model, use_cuda=True):
+        #with open(model_path, 'rb') as f:
+        self.model = model
+        if use_cuda:
+            self.model.cuda()
+        else:
+            self.model.cpu()
         self.model.eval()
         self.normalize = torch.nn.LogSigmoid()
         self.use_cuda = use_cuda
