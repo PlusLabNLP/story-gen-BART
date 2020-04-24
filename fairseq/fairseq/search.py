@@ -8,6 +8,7 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
+from fairseq.data.data_utils import collate_tokens
 
 
 class Search(nn.Module):
@@ -223,7 +224,7 @@ class Sampling(Search):
         return trimed_probs, truncated_indices
 
     def step(self, step, lprobs, scores, src_tokens=None, tgt_tokens=None, **kwargs): # src and tgt_tokens to far #TODO make sure that we get an empty tgt tokens on first pass
-        print("First lprobs: {}".format(lprobs))
+        
         super()._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
         logprob = None
@@ -252,7 +253,8 @@ class Sampling(Search):
 
         lprobs = logprob.clone()
         #sample
-        print(lprobs, probs)
+        #print("initial lprobs, probs")
+        #print(lprobs, probs)
         if rescore:
             # potentially rescore
             # also rescore gold if learning
@@ -260,33 +262,46 @@ class Sampling(Search):
             #         true_cont_tokens):  # add gold answer to the list
             #     cont_tokens.append(true_cont_tokens[
             #                        :num_cont_words])  # this appends all gold cont tokens up to the step number - so more gold on each iteration
-
-
-            score_adjustment = np.zeros(len(top_indices))
+            # TODO support batch > 1
+            top_indices = top_indices.squeeze(0) # make 2D, unclear why 3
+            n_hypos = top_indices.shape[1]
+            score_adjustment = np.zeros(n_hypos)
+            #cont_tokens = todo make this work for multiple batch size  > 1 by chunking tensors
             if rescore:  # add score adjustment according to the scorers.
                 #all_raw_scores = []
-                for coef, scorer in zip(coefs,
-                                        scorers):  # Note that this throws an error if there is just one scorer
+                for coef, scorer in zip(coefs, scorers):
                     # this makes an array for each scorer from calling the scorer forward function on the candidate tokens
                     # TODO could potentially make this faster by considering shared continuation to be init_tokens
-                    new_scores = scorer(src_tokens, tgt_tokens, False) # third arg is whether to have the discriminator normalize scores via logsigmoid. Defaulted to False in prev code
-                    raw_scores = np.asarray(new_scores)
+
+                    # assemble hypothesis batch
+                    src_tokens = src_tokens.repeat_interleave(n_hypos, dim=0) # repeat by k of topk 
+                    #breakpoint()
+                    hypothesis_batch = torch.cat((src_tokens, top_indices.transpose(0,1)), dim=1) # builds a bunch of examples of src + cont toks
+                    
+                    #hypothesis_batch = collate_tokens([torch.cat((src_tokens, top_indices[i])) for i in range(len(top_indices))], pad_idx=1)
+                    new_scores = scorer.predict("sentence_classification_head", hypothesis_batch) # determine whether to norm scores
+                    raw_scores = np.array([score[1].data.item() for score in new_scores]) # index 1 is positive class
                     #all_raw_scores.append(raw_scores)
                     # elementwise add the new scores to the np array after elementwise multiplying by coef
-                    score_adjustment += raw_scores[:len(
-                        top_indices)] * coef  # why restrict to len(candidates)? It seems like the scorer sometimes but not always returns +1 more result than candidates
+                    score_adjustment += raw_scores * coef  
                 #all_raw_scores = np.stack(all_raw_scores, axis=-1)  # this converts to num_candidates x num_scorers so each row is all adjusted scores for a candidate
 
-                #if self.learn and num_cont_words < len(true_cont_tokens):
+                #if self.learn and num_cont_words < len(true_cont_tokens): # tgt_tokens should be the true cont tokens
                 #    gold_cont_raw_scores = all_raw_scores[-1]
-                print("Score Adjustment")
-                print(score_adjustment)
-                # print("Before Disc")
-                # print(probs)
-                # for i in range(len(top_indices)):
-                #     probs[i] = probs[i] + score_adjustment[i]
-                # print("After Disc")
-                # print(probs)
+                
+                #print("Score Adjustment")
+                #print(score_adjustment)
+                #print("Before Disc")
+                #print(lprobs, probs)
+                
+                mod_probs = lprobs.clone()
+                for i in range(n_hypos): # unclear again why lprobs is 3D
+                    mod_probs[0][0][i] = lprobs[0][0][i] + score_adjustment[i]
+                #print("After Disc")
+                lprobs = mod_probs.clone()
+                probs = mod_probs.clone().exp_()
+                #print(lprobs, probs)
+                
                 # TODO do I need to sort? I don't think so. top_indices were in descending order and now they aren't, but we sample from them so should be fine
 
         # sample
