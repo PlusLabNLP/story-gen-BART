@@ -13,6 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--apply_disc', action='store_true', help='whether to use discriminators to rescore')
 parser.add_argument('--scorers', type=str, default='checkpoint/WP_scorers.tsv', help='tsv with discriminator info')
 parser.add_argument('--batch_size', type=int, default=1)
+parser.add_argument('--dedup', action='store_true')
 
 args = parser.parse_args()
 print("Args: ", args, file=sys.stderr)
@@ -60,7 +61,8 @@ with open('./temp/val.source.small') as source, open('temp/val.plot.hypo_rel_2.5
             with torch.no_grad():
                 hypotheses_batch = bart.sample(slines, sampling=True, sampling_topk=5 ,lenpen=2.0,
                                                max_len_b=250, min_len=55, no_repeat_ngram_size=3,
-                                               rescore=args.apply_disc, coefs=coefs, scorers=scorers, learn=False)
+                                               rescore=args.apply_disc, coefs=coefs, scorers=scorers,
+                                               learn=False, dedup=args.dedup)
 
             for hypothesis in hypotheses_batch:
                 fout.write(hypothesis.replace('\n','') + '\n')

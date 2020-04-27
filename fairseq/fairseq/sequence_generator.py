@@ -29,6 +29,7 @@ class SequenceGenerator(object):
         match_source_len=False,
         no_repeat_ngram_size=0,
         search_strategy=None,
+        dedup=False
     ):
         """Generates translations of a given source sentence.
 
@@ -56,6 +57,7 @@ class SequenceGenerator(object):
         self.pad = tgt_dict.pad()
         self.unk = tgt_dict.unk()
         self.eos = tgt_dict.eos()
+        self.verb = tgt_dict.index("<V>")
         self.vocab_size = len(tgt_dict)
         self.beam_size = beam_size
         # the max beam size is the dictionary size - 1, since we never select pad
@@ -70,6 +72,7 @@ class SequenceGenerator(object):
         self.temperature = temperature
         self.match_source_len = match_source_len
         self.no_repeat_ngram_size = no_repeat_ngram_size
+        self.dedup = dedup
         assert temperature > 0, '--temperature must be greater than 0'
 
         self.search = (
@@ -318,7 +321,7 @@ class SequenceGenerator(object):
                 lprobs[:, self.eos] = -math.inf
 
             if self.no_repeat_ngram_size > 0:
-                # for each beam and batch sentence, generate a list of previous ngrams
+                # for each beam and batch sentence, generate a list of previous ngrams (will be same length as step)
                 gen_ngrams = [{} for bbsz_idx in range(bsz * beam_size)]
                 for bbsz_idx in range(bsz * beam_size):
                     gen_tokens = tokens[bbsz_idx].tolist()
@@ -342,11 +345,13 @@ class SequenceGenerator(object):
 
             self.search.set_src_lengths(src_lengths)
 
+            banned_tokens = []
             if self.no_repeat_ngram_size > 0:
                 def calculate_banned_tokens(bbsz_idx):
                     # before decoding the next token, prevent decoding of ngrams that have already appeared
+                    # grabs a tuple of n -1 grams, so that can look in the dict for banned continuations (e.g. if ngram = 3, then tuple will be bigrams_
                     ngram_index = tuple(tokens[bbsz_idx, step + 2 - self.no_repeat_ngram_size:step + 1].tolist())
-                    return gen_ngrams[bbsz_idx].get(ngram_index, [])
+                    return gen_ngrams[bbsz_idx].get(ngram_index, []) # returns the indices of banned continuations
 
                 if step + 2 - self.no_repeat_ngram_size >= 0:
                     # no banned tokens if we haven't generated no_repeat_ngram_size tokens yet
@@ -354,8 +359,20 @@ class SequenceGenerator(object):
                 else:
                     banned_tokens = [[] for bbsz_idx in range(bsz * beam_size)]
 
-                for bbsz_idx in range(bsz * beam_size):
+            if self.dedup:
+                def find_verbs(bbsz_idx):
+                    np_toks = tokens[bbsz_idx].cpu().numpy()
+                    verb_idxs = np.where(np_toks == self.verb)
+                    return [tokens[bbsz_idx][i +1] for i in verb_idxs] # grab the next token following a verb symbol
+                # find all tokens that are previously used verbs, zero out their lprobs
+                # much harder to ban the whole "word" but should be able to just ban the first token since that effectively bans the word
+                banned_tokens.extend([find_verbs(bbsz_idx) for bbsz_idx in range(bsz * beam_size)])
+
+            if banned_tokens:
+                for bbsz_idx in range(bsz * beam_size):  # batch size & beam size
                     lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
+
+
             # the self.search.step actually only returns the top thing that you need. So we pass in src_tokens and tgt_tokens (so far) to be able to use discriminators in the search
             # in kwargs will be all the other things we need
             cand_scores, cand_indices, cand_beams = self.search.step(
