@@ -367,8 +367,9 @@ class SequenceGenerator(object):
                     np_toks = tokens[bbsz_idx].cpu().numpy()
                     if self.verb not in np_toks:
                         return []
-                    verb_idxs = np.where(np_toks == self.verb)
-                    print(verb_idxs)
+                    verb_idxs = np.asarray(np.where(np_toks == self.verb))
+                    #breakpoint()
+                    #print(verb_idxs)
                     #print([tokens[bbsz_idx][i] for i in verb_idxs])
                     return [tokens[bbsz_idx][i +1].item() for i in verb_idxs] # grab the next token following a verb symbol
                 # find all tokens that are previously used verbs, zero out their lprobs
