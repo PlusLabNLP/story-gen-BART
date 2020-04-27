@@ -226,6 +226,8 @@ class FairseqTask(object):
         diverse_beam_strength = getattr(args, 'diverse_beam_strength', 0.5),
         match_source_len = getattr(args, 'match_source_len', False)
         diversity_rate = getattr(args, 'diversity_rate', -1)
+        dedup = getattr(args, 'dedup', False)
+        verb_idx = getattr(args, 'verb_idx')
         if (
             sum(
                 int(cond)
@@ -277,6 +279,8 @@ class FairseqTask(object):
             match_source_len=getattr(args, 'match_source_len', False),
             no_repeat_ngram_size=getattr(args, 'no_repeat_ngram_size', 0),
             search_strategy=search_strategy,
+            dedup=dedup,
+            verb=verb_idx
         )
 
     def train_step(self, sample, model, criterion, optimizer, ignore_grad=False):

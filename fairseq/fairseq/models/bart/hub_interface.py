@@ -104,7 +104,12 @@ class BARTHubInterface(nn.Module):
 
     def sample(self, sentences: List[str], beam: int = 1, verbose: bool = False, **kwargs) -> str:
         input = [self.encode(sentence) for sentence in sentences]
-        hypos = self.generate(input, beam, verbose, **kwargs)
+        # I have literally no idea where this came from, I got it via printing
+        hypos = self.generate(input, beam, verbose, verb_idx=41632, **kwargs)
+        # for x in hypos:
+        #     for i in range(0, len(x["tokens"]), 2):
+        #         this = x["tokens"][i:i+2]
+        #         print(this, self.decode(this))
         return [self.decode(x['tokens']) for x in hypos]
 
     def generate(self, tokens: List[torch.LongTensor], beam: int = 5, verbose: bool = False, **kwargs) -> torch.LongTensor:
