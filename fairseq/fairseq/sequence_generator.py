@@ -2,7 +2,7 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+import copy
 import math
 
 import numpy as np
@@ -31,6 +31,11 @@ class SequenceGenerator(object):
         search_strategy=None,
         dedup=False,
         verb=None,
+        # used for training mixture coefficients only
+        coefs=None,
+        coef_trainer=None,
+        learn=False
+
     ):
         """Generates translations of a given source sentence.
 
@@ -74,6 +79,10 @@ class SequenceGenerator(object):
         self.match_source_len = match_source_len
         self.no_repeat_ngram_size = no_repeat_ngram_size
         self.dedup = dedup
+        # used for training mixture coefficients only
+        self.coef_trainer = coef_trainer
+        self.coefs = coefs
+        self.learn = learn
         assert temperature > 0, '--temperature must be greater than 0'
 
         self.search = (
@@ -379,7 +388,43 @@ class SequenceGenerator(object):
                 #print(banned_tokens)
                 for bbsz_idx in range(bsz * beam_size):  # batch size & beam size
                     lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
+            # calculate gold token language model score
+            if self.learn:
+                # Have not tested this with beam > 1, some of the truncation might not work
+                gold_tokens = kwargs.get('gold_sample').get('net_input').get('src_tokens')
+                num_gold_tokens = gold_tokens.shape[1]
+                reference_scorer = kwargs.get('reference_scorer')
 
+                # gold_input = {
+                #     k: v for k, v in gold_sample['net_input'].items()
+                #     if k != 'prev_output_tokens'
+                # }
+                # gold_tokens = gold_input["src_tokens"] # src_tokens is dim batch x length
+                gold_length = min(step+1, num_gold_tokens)
+                #print(type(gold_tokens))
+                gold_tokens_trunc = gold_tokens[:, :gold_length]  # model expects 2D
+                #
+                gold_sample = copy.copy(sample)
+                #gold_input["src_lengths"] = torch.tensor(src_lengths.data.item() + gold_length).unsqueeze(0)  # src_lengths is dim 1, as list of length for the batch
+                #gold_input["src_tokens"] = torch.cat((src_tokens, gold_tokens_trunc), dim=1)  # this should be 1D tensor of length of src_lengths
+
+                #gold_sample = {"net_input": [src_tokens, src_lengths,  torch.tensor([2]).unsqueeze(0)]}
+                gold_sample["net_input"]["prev_output_tokens"] = gold_tokens_trunc #torch.LongTensor([2]).unsqueeze(0)
+                gold_sample['target'] = gold_tokens_trunc
+                seq_score = reference_scorer.generate(model.models, gold_sample)
+                 # gold_encoder_outs = model.forward_encoder(gold_input)
+                 # # nothing about the ordering is dependent on the tokens, so can use new_order from original forward
+                 # gold_encoder_outs = model.reorder_encoder_out(gold_encoder_outs, new_order)
+
+                 #x = model.models[0](src_tokens, src_lengths, gold_tokens_trunc)
+                 ##x = model.models[0].extract_features(gold_input["src_lengths"], gold_input["src_tokens"], [])
+
+                 #gold_lprobs, gold_avg_attn_scores = model.forward_decoder(gold_tokens, # this used to be tokens[:, :step + 1] -- check that "tokens" wasn't anything super special
+                 #                                                   gold_encoder_outs,
+                 #                                                   temperature=self.temperature)
+                 # add things to kwargs for access in step
+                kwargs["gold_tokens"] = gold_tokens_trunc
+                kwargs["gold_lprobs"] = seq_score[0][0]["score"]
 
             # the self.search.step actually only returns the top thing that you need. So we pass in src_tokens and tgt_tokens (so far) to be able to use discriminators in the search
             # in kwargs will be all the other things we need
@@ -388,7 +433,7 @@ class SequenceGenerator(object):
                 lprobs.view(bsz, -1, self.vocab_size),
                 scores.view(bsz, beam_size, -1)[:, :, :step],
                 src_tokens,
-                tokens,
+                tokens[:, 1:step + 1],  # this is the generated tokens till now, to cut off the padding ones. The one cuts off the first bos token?
                 **kwargs
             )
 

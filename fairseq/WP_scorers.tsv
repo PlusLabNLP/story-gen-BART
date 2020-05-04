@@ -1,0 +1,3 @@
+#COEF	CHECKPOINT_DIR	CHECKPOINT	DATA_DIR
+0.0	relevance-roberta/	checkpoint_best.pt	roberta.large/
+1.0	relevance-roberta/	checkpoint_best.pt	roberta.large/

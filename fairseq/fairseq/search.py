@@ -223,7 +223,7 @@ class Sampling(Search):
         trimed_probs = truncated_probs.masked_fill_(trim_mask, 0)
         return trimed_probs, truncated_indices
 
-    def step(self, step, lprobs, scores, src_tokens=None, tgt_tokens=None, **kwargs): # src and tgt_tokens to far #TODO make sure that we get an empty tgt tokens on first pass
+    def step(self, step, lprobs, scores, src_tokens=None, gen_tokens=None, **kwargs): # src and tgt_tokens to far #TODO make sure that we get an empty tgt tokens on first pass
         
         super()._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
@@ -234,6 +234,9 @@ class Sampling(Search):
         coefs = kwargs.get("coefs", [])
         scorers = kwargs.get("scorers", [])
         learn = kwargs.get("learn", "False")
+        coef_trainer = kwargs.get("coef_trainer")
+        gold_tokens = kwargs.get("gold_tokens")
+        gold_lm_score = kwargs.get("gold_lprobs")
 
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
@@ -257,37 +260,39 @@ class Sampling(Search):
         #print(lprobs, probs)
         if rescore:
             # potentially rescore
-            # also rescore gold if learning
-            # if learn and num_cont_words < len(
-            #         true_cont_tokens):  # add gold answer to the list
-            #     cont_tokens.append(true_cont_tokens[
-            #                        :num_cont_words])  # this appends all gold cont tokens up to the step number - so more gold on each iteration
             # TODO support batch > 1
             top_indices = top_indices.squeeze(0) # make 2D, unclear why 3
             n_hypos = top_indices.shape[1]
             score_adjustment = np.zeros(n_hypos)
             #cont_tokens = todo make this work for multiple batch size  > 1 by chunking tensors
             if rescore:  # add score adjustment according to the scorers.
-                #all_raw_scores = []
+                if learn:
+                    #TODO fix so it works with one scorer
+                    coefs = coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
+                    print("Coefs: {}".format(coefs))
+                all_raw_scores = []
                 for coef, scorer in zip(coefs, scorers):
                     # this makes an array for each scorer from calling the scorer forward function on the candidate tokens
                     # TODO could potentially make this faster by considering shared continuation to be init_tokens
 
                     # assemble hypothesis batch
-                    src_tokens = src_tokens.repeat_interleave(n_hypos, dim=0) # repeat by k of topk 
+                    all_tokens = torch.cat((src_tokens, gen_tokens), dim=1) if step > 0 else src_tokens  # add the stuff generated so far to the fixed prefix
+                    all_tokens = all_tokens.repeat_interleave(n_hypos, dim=0) # repeat by k of topk
                     #breakpoint()
-                    hypothesis_batch = torch.cat((src_tokens, top_indices.transpose(0,1)), dim=1) # builds a bunch of examples of src + cont toks
+                    hypothesis_batch = torch.cat((all_tokens, top_indices.transpose(0, 1)), dim=1) # builds a bunch of examples of src + cont toks
+                    if learn:  # add the gold example to the end as new row
+                        gold_example = torch.cat((src_tokens, gold_tokens), dim=1)
+                        hypothesis_batch = torch.cat((hypothesis_batch, gold_example))
                     
                     #hypothesis_batch = collate_tokens([torch.cat((src_tokens, top_indices[i])) for i in range(len(top_indices))], pad_idx=1)
                     new_scores = scorer.predict("sentence_classification_head", hypothesis_batch) # determine whether to norm scores
                     raw_scores = np.array([score[1].data.item() for score in new_scores]) # index 1 is positive class
-                    #all_raw_scores.append(raw_scores)
+                    all_raw_scores.append(raw_scores)
                     # elementwise add the new scores to the np array after elementwise multiplying by coef
-                    score_adjustment += raw_scores * coef  
-                #all_raw_scores = np.stack(all_raw_scores, axis=-1)  # this converts to num_candidates x num_scorers so each row is all adjusted scores for a candidate
+                    score_adjustment += raw_scores[:self.sampling_topk] * coef  # truncate so don't include extra stuff like gold scores if in there
+                all_raw_scores = np.stack(all_raw_scores, axis=-1)  # this converts to num_candidates x num_scorers so each row is all adjusted scores for a candidate. Probs necessary only for proper beam search
 
                 #if self.learn and num_cont_words < len(true_cont_tokens): # tgt_tokens should be the true cont tokens
-                #    gold_cont_raw_scores = all_raw_scores[-1]
                 
                 #print("Score Adjustment")
                 #print(score_adjustment)
@@ -301,8 +306,15 @@ class Sampling(Search):
                 lprobs = mod_probs.clone()
                 probs = mod_probs.clone().exp_()
                 #print(lprobs, probs)
+                max_lprob, max_idx = lprobs.max(2)  # along second dimension
+                if learn:
+                    gold_cont_raw_scores = all_raw_scores[-1]
+                    #train coefficients with lm score of gold, best candidate score, and continuation scores for gold
+                    loss = coef_trainer.train_coefficients(gold_lm_score, max_lprob,
+                                                           gold_cont_raw_scores,
+                                                           all_raw_scores[max_idx.data.item()])
                 
-                # TODO do I need to sort? I don't think so. top_indices were in descending order and now they aren't, but we sample from them so should be fine
+                # do I need to sort? I don't think so. top_indices were in descending order and now they aren't, but we sample from them so should be fine
 
         # sample
         if step == 0:

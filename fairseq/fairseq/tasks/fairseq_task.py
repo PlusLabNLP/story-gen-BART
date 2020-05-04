@@ -228,6 +228,9 @@ class FairseqTask(object):
         diversity_rate = getattr(args, 'diversity_rate', -1)
         dedup = getattr(args, 'dedup', False)
         verb_idx = getattr(args, 'verb_idx')
+        coef_trainer = getattr(args, 'coef_trainer', None)
+        coefs = getattr(args, 'coefs', [])
+        learn = getattr(args, 'learn', False)
         if (
             sum(
                 int(cond)
@@ -280,7 +283,10 @@ class FairseqTask(object):
             no_repeat_ngram_size=getattr(args, 'no_repeat_ngram_size', 0),
             search_strategy=search_strategy,
             dedup=dedup,
-            verb=verb_idx
+            verb=verb_idx,
+            coef_trainer=coef_trainer,
+            coefs=coefs,
+            learn=learn
         )
 
     def train_step(self, sample, model, criterion, optimizer, ignore_grad=False):
