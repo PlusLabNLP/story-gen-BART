@@ -62,7 +62,7 @@ class CoefTrainer:
         if self.use_ranking_loss and loss.data.item() == 0:
             self.total_correct += 1  # whether or not it is correct is whether the scorer did in fact say the gold was higher rank
         self.total_n += 1
-        if self.total_n % 1 == 0:
+        if self.total_n % 200 == 0:
             if self.use_ranking_loss:
                 print('Train Accuracy: %f' % (self.total_correct / self.total_n))
             print('Loss: %f' % (self.total_loss / self.total_n))

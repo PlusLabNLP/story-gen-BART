@@ -47,6 +47,8 @@ if use_cuda:
 scorers = []
 coefs, scorer_info = load_scorers(args.scorers) # will need to deal with the config only if learning
 for info in scorer_info:
+    if len(info) > 3:
+        print("too many fields (3 req): {}".format(info))
     model_dir, checkpoint_name, data_path = info
 
     roberta = RobertaModel.from_pretrained(

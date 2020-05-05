@@ -269,7 +269,8 @@ class Sampling(Search):
                 if learn:
                     #TODO fix so it works with one scorer
                     coefs = coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
-                    print("Coefs: {}".format(coefs))
+                    if step % 100 == 0:
+                        print("Coefs: {}".format(coefs))
                 all_raw_scores = []
                 for coef, scorer in zip(coefs, scorers):
                     # this makes an array for each scorer from calling the scorer forward function on the candidate tokens
@@ -282,14 +283,29 @@ class Sampling(Search):
                     hypothesis_batch = torch.cat((all_tokens, top_indices.transpose(0, 1)), dim=1) # builds a bunch of examples of src + cont toks
                     if learn:  # add the gold example to the end as new row
                         gold_example = torch.cat((src_tokens, gold_tokens), dim=1)
-                        hypothesis_batch = torch.cat((hypothesis_batch, gold_example))
-                    
+                        gold_separate = False
+                        if gold_example.shape[1] == hypothesis_batch.shape[1]:  # this will always be true unless the generation has become longer than the gold
+                            hypothesis_batch = torch.cat((hypothesis_batch, gold_example))
+                        else:
+                            gold_separate = True
+
                     #hypothesis_batch = collate_tokens([torch.cat((src_tokens, top_indices[i])) for i in range(len(top_indices))], pad_idx=1)
+                    # returns a tensor of scores
                     new_scores = scorer.predict("sentence_classification_head", hypothesis_batch) # determine whether to norm scores
+                    
+                    if learn and gold_separate:
+                        gold_scores = scorer.predict("sentence_classification_head", gold_example)
+                        #raw_gold_scores = np.array([gs[1].data.item() for gs in gold_scores]) #for score in new_scores]) # index 1 is positive class
+                        new_scores = torch.cat((new_scores, gold_scores))
                     raw_scores = np.array([score[1].data.item() for score in new_scores]) # index 1 is positive class
                     all_raw_scores.append(raw_scores)
                     # elementwise add the new scores to the np array after elementwise multiplying by coef
                     score_adjustment += raw_scores[:self.sampling_topk] * coef  # truncate so don't include extra stuff like gold scores if in there
+                    #if learn and gold_separate:
+                    #    new_scores = scorer.predict("sentence_classification_head", gold_example)
+                    #    raw_scores = np.array([score[1].data.item() for score in new_scores]) # index 1 is positive class
+                    #    all_raw_scores.append(raw_scores)
+                #print([scores.shape for scores in all_raw_scores])
                 all_raw_scores = np.stack(all_raw_scores, axis=-1)  # this converts to num_candidates x num_scorers so each row is all adjusted scores for a candidate. Probs necessary only for proper beam search
 
                 #if self.learn and num_cont_words < len(true_cont_tokens): # tgt_tokens should be the true cont tokens
