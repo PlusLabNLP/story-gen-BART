@@ -76,9 +76,6 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout, open(args.s
     slines, cont_lines = [], []
     # TODO consider adding epochs here to re-loop over data
     for sline in fin:
-        if count == 0:
-            print("Example Data:\nContext: {}\n Continuation: {}".format(sline, cont_line))
-
         if count % bsz == 0 and count:
             with torch.no_grad():
                 hypotheses_batch = bart.sample(slines, sampling=True, sampling_topk=5, lenpen=2.0,
@@ -94,6 +91,9 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout, open(args.s
             batch += 1
 
         sline, cont_line = sline.strip().split(args.split, 1)
+        if count == 0:
+            print("Example Data:\nContext: {}\n Continuation: {}".format(sline, cont_line))
+
         slines.append(sline)
         cont_lines.append(cont_line)
         count += 1

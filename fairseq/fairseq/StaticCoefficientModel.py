@@ -10,7 +10,7 @@ class StaticCoefficientModel(nn.Module):
         super(StaticCoefficientModel, self).__init__()
         self.num_mods = num_mods
         self.coefs = nn.Linear(num_mods, 1, bias=False)
-        self.coefs.weight.data = torch.FloatTensor(np.zeros((1, num_mods)))
+        self.coefs.weight.data = torch.FloatTensor(np.ones((1, num_mods)))
 
     def forward(self, scores):
         #print(scores)
@@ -47,7 +47,7 @@ class CoefTrainer:
         pair_scores = pair_scores + lm_scores
         #print("pair scores concat", pair_scores)
         pred = pair_scores[0] - pair_scores[1]
-
+        #breakpoint()
         if self.use_ranking_loss:
             loss = self.loss((pair_scores[0]).unsqueeze(0),
                              (pair_scores[1]).unsqueeze(0), torch.ones(1))
@@ -55,7 +55,7 @@ class CoefTrainer:
         else:
             loss = self.loss(pred,
                              torch.FloatTensor([0]))  # use MSELoss, ((input-target)**2).mean()
-        # print(loss.data.item())
+        #print(loss.data.item())
         loss.requires_grad = True
         loss.backward()
         self.total_loss += loss.data.item()
