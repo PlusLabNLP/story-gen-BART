@@ -5,7 +5,7 @@ import torch
 
 def load_scorers(filepath):
     """expects a tsv of coefficients paired with scorer model info (used to load it in)"""
-    coefs, model_info = [], []
+    scorer_config, coefs, model_info = [], [], []
     with open(filepath, "r") as scorer_file:
         for line in scorer_file:
             if line.startswith("#"):
@@ -13,8 +13,9 @@ def load_scorers(filepath):
             fields = line.strip().split('\t') # expect coef and then name
             coefs.append(float(fields[0]))
             model_info.append(fields[1:])
+            scorer_config.append(fields)
     print("Coefs:", coefs, file=sys.stderr)
-    return coefs, model_info
+    return coefs, model_info, scorer_config
 
 
 # OLD VERSION

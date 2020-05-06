@@ -19,6 +19,7 @@ parser.add_argument('--dedup', action='store_true')
 parser.add_argument('--ranking_loss', action='store_true')
 parser.add_argument('--lr', type=float, default=0.001)
 parser.add_argument('--split', type=str, default="<EOT>", help='first character to split on for context and continuation')
+parser.add_argument('--save_every', type=int, default=50, help='number of batches to save after')
 
 args = parser.parse_args()
 print("Args: ", args, file=sys.stderr)
@@ -45,7 +46,7 @@ if use_cuda:
 
 ### load discriminators
 scorers = []
-coefs, scorer_info = load_scorers(args.scorers) # will need to deal with the config only if learning
+coefs, scorer_info, scorer_config = load_scorers(args.scorers)
 for info in scorer_info:
     model_dir, checkpoint_name, data_path = info
 
@@ -64,16 +65,18 @@ for info in scorer_info:
 # learning coefficients
 coef_trainer = CoefTrainer(len(scorers), args.ranking_loss, args.lr)
 
-
-
-count = 0
+count, batch = 0, 0
 bsz = args.batch_size
+avg, a_n = 0, 0  # used for tracking writing coefs
 
-with open(args.infile, 'r') as source, open(args.outfile, 'w') as fout:
-    sline = source.readline().strip()
+with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout, open(args.scorers, 'w') as sout:
+    sline = fin.readline().strip()
     slines, cont_lines = [], []
     # TODO consider adding epochs here to re-loop over data
-    for sline in source:
+    for sline in fin:
+        if count == 0:
+            print("Example Data:\nContext: {}\n Continuation: {}".format(sline, cont_line))
+
         if count % bsz == 0 and count:
             with torch.no_grad():
                 hypotheses_batch = bart.sample(slines, sampling=True, sampling_topk=5, lenpen=2.0,
@@ -86,13 +89,27 @@ with open(args.infile, 'r') as source, open(args.outfile, 'w') as fout:
                 fout.write(hypothesis.replace('\n', '') + '\n')
                 fout.flush()
             slines, cont_lines = [], []
+            batch += 1
 
         sline, cont_line = sline.strip().split(args.split, 1)
         slines.append(sline)
         cont_lines.append(cont_line)
         count += 1
-    if slines != []:
-        hypotheses_batch = bart.sample(slines, sampling=True,  sampling_topk=5, lenpen=2.0, max_len_b=250, min_len=55, no_repeat_ngram_size=3)
-        for hypothesis in hypotheses_batch:
-            fout.write(hypothesis.replace('\n','') + '\n')
-            fout.flush()
+
+        if batch % args.save_every == 0:
+            # avg and a_n init to None and 0. a_n seems to just track the saves
+            with open(args.scorers, 'w') as out:
+                if avg is None:
+                    avg = coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().clone()
+                else:
+                    avg += coef_trainer.weight_model.coefs.weight.data.cpu().squeeze()
+                a_n += 1
+                for s, coef in enumerate(avg.numpy() / a_n):
+                    scorer_config[s][0] = str(coef)
+                    out.write('%s\n' % '\t'.join(scorer_config[s]))
+                print("Writing coefficients: ", avg / a_n, file=sys.stderr)
+    # if slines != []:
+    #     hypotheses_batch = bart.sample(slines, sampling=True,  sampling_topk=5, lenpen=2.0, max_len_b=250, min_len=55, no_repeat_ngram_size=3)
+    #     for hypothesis in hypotheses_batch:
+    #         fout.write(hypothesis.replace('\n','') + '\n')
+    #         fout.flush()
