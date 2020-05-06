@@ -24,7 +24,7 @@ parser.add_argument('--save_every', type=int, default=50, help='number of batche
 args = parser.parse_args()
 print("Args: ", args, file=sys.stderr)
 
-os.environ['CUDA_VISIBLE_DEVICES']="0"
+os.environ['CUDA_VISIBLE_DEVICES']="2"
 
 use_cuda = torch.cuda.is_available()
 
