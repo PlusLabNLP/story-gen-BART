@@ -34,7 +34,8 @@ class SequenceGenerator(object):
         # used for training mixture coefficients only
         coefs=None,
         coef_trainer=None,
-        learn=False
+        learn=False,
+        learn_every_token=False,
 
     ):
         """Generates translations of a given source sentence.
@@ -83,6 +84,7 @@ class SequenceGenerator(object):
         self.coef_trainer = coef_trainer
         self.coefs = coefs
         self.learn = learn
+        self.learn_every_token = False # controls granularity of token learning
         assert temperature > 0, '--temperature must be greater than 0'
 
         self.search = (
@@ -389,7 +391,7 @@ class SequenceGenerator(object):
                 for bbsz_idx in range(bsz * beam_size):  # batch size & beam size
                     lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
             # calculate gold token language model score
-            if self.learn:
+            if self.learn and self.learn_every_token:
                 # Have not tested this with beam > 1, some of the truncation might not work
                 gold_tokens = kwargs.get('gold_sample').get('net_input').get('src_tokens')
                 num_gold_tokens = gold_tokens.shape[1]
@@ -574,6 +576,36 @@ class SequenceGenerator(object):
         # sort by score descending
         for sent in range(len(finalized)):
             finalized[sent] = sorted(finalized[sent], key=lambda r: r['score'], reverse=True)
+
+        # if self.learn and not self.learn_every_token:  # only train on completed sequence
+        #     all_raw_scores, gold_cont_raw_scores = [], []
+        #     scorers = kwargs.get("scorers", [])
+        #     gold_tokens = kwargs.get('gold_sample').get('net_input').get('src_tokens')
+        #     num_gold_tokens = gold_tokens.shape[1]
+        #     reference_scorer = kwargs.get('reference_scorer')
+        #     coefs = self.coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
+        #
+        #     for coef, scorer in zip(coefs, scorers):  # get scores for generation and for gold, given source tokens
+        #         raw_score = scorer.predict("sentence_classification_head", gen_example)
+        #         gold_score = scorer.predict("sentence_classification_head", gold_example)
+        #         all_raw_scores.append(raw_score[1].data.item())
+        #         gold_cont_raw_scores.append(gold_score[1].data.item())
+        #     # get language model scores for gold sequence
+        #     gold_sample = copy.copy(sample)
+        #     gold_sample["net_input"][
+        #         "prev_output_tokens"] = gold_tokens
+        #     gold_sample['target'] = gold_tokens
+        #     seq_score = reference_scorer.generate(model.models, gold_sample)
+
+
+
+            # # get language model score for gold
+            # loss = self.coef_trainer.train_coefficients(gold_lm_score, max_lprob,
+            #                                        gold_cont_raw_scores,
+            #                                        all_raw_scores)
+
+
+
         return finalized
 
 
