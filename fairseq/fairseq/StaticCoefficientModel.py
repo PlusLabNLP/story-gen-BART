@@ -6,11 +6,15 @@ import numpy as np
 
 
 class StaticCoefficientModel(nn.Module):
-    def __init__(self, num_mods):
+    def __init__(self, num_mods, load_coefs: list=None):
         super(StaticCoefficientModel, self).__init__()
         self.num_mods = num_mods
         self.coefs = nn.Linear(num_mods, 1, bias=False)
-        self.coefs.weight.data = torch.FloatTensor(np.ones((1, num_mods)))
+        if load_coefs:
+            self.coefs.weight.data = torch.FloatTensor(load_coefs).unsqueeze(0)
+        else:
+            self.coefs.weight.data = torch.FloatTensor(np.ones((1, num_mods)))
+        print("loaded coefs: {}".format(self.coefs.weight.data))
 
     def forward(self, scores):
         #print(scores)
@@ -20,8 +24,8 @@ class StaticCoefficientModel(nn.Module):
 class CoefTrainer:
     """class for training scorer coefficients"""
 
-    def __init__(self, num_scorers, ranking_loss, lr):
-            self.weight_model = StaticCoefficientModel(num_scorers)
+    def __init__(self, num_scorers, ranking_loss, lr, load_coefs: list=None):
+            self.weight_model = StaticCoefficientModel(num_scorers, load_coefs)
             self.use_ranking_loss = ranking_loss
             if self.use_ranking_loss:
                 self.loss = nn.MarginRankingLoss()

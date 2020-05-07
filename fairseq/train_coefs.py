@@ -65,13 +65,13 @@ for info in scorer_info:
     scorers.append(roberta)
 
 # learning coefficients
-coef_trainer = CoefTrainer(len(scorers), args.ranking_loss, args.lr)
+coef_trainer = CoefTrainer(len(scorers), args.ranking_loss, args.lr, coefs)
 
 count, batch = 0, 0
 bsz = args.batch_size
 avg, a_n = 0, 0  # used for tracking writing coefs
 
-with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout, open(args.scorers, 'w') as sout:
+with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
     sline = fin.readline().strip()
     slines, cont_lines = [], []
     # TODO consider adding epochs here to re-loop over data
