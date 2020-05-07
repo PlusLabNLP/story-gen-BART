@@ -121,7 +121,10 @@ class BARTHubInterface(nn.Module):
         sample = self._build_sample(tokens)
         # for coefficient training need gold tokens
         gold_toks = kwargs.get("gold_tokens")
-        kwargs["gold_sample"] = self._build_sample(gold_toks) if gold_toks else None
+        gold_sample = self._build_sample(gold_toks) if gold_toks else None
+        if gold_sample:
+            kwargs["gold_sample"] = gold_sample
+            kwargs["gold_tokens"] = gold_sample.get('net_input').get('src_tokens')
         # build generator using current args as well as any kwargs
         gen_args = copy.copy(self.args)
         gen_args.beam = beam

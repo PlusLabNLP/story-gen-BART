@@ -2,7 +2,7 @@ import argparse
 
 import sys
 import os
-import copy
+import time
 import torch
 from fairseq.models.bart import BARTModel
 from fairseq.models.roberta import RobertaModel
@@ -80,6 +80,7 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
     for epoch in range(args.epochs):
         for sline in fin:
             if count % bsz == 0 and count:
+                start_time = time.time()
                 with torch.no_grad():
                     hypotheses_batch = bart.sample(slines, sampling=True, sampling_topk=5, lenpen=2.0,
                                                    max_len_b=250, min_len=55, no_repeat_ngram_size=3,
@@ -87,7 +88,8 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
                                                    learn=True, dedup=args.dedup, gold_tokens=cont_lines,
                                                    coef_trainer=coef_trainer,
                                                    learn_every_token=args.learn_every_token)
-
+                elapsed = time.time() - start_time
+                print("Seconds per batch: {}".format(elapsed * 1000))
                 for hypothesis in hypotheses_batch:
                     fout.write(hypothesis.replace('\n', '') + '\n')
                     fout.flush()
