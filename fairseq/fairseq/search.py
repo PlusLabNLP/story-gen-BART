@@ -234,6 +234,7 @@ class Sampling(Search):
         coefs = kwargs.get("coefs", [])
         scorers = kwargs.get("scorers", [])
         learn = kwargs.get("learn", "False")
+        learn_every_token = kwargs.get("learn_every_token")
         coef_trainer = kwargs.get("coef_trainer")
         gold_tokens = kwargs.get("gold_tokens")
         gold_lm_score = kwargs.get("gold_lprobs")
@@ -260,30 +261,30 @@ class Sampling(Search):
         #print(lprobs, probs)
         if rescore:
             # potentially rescore
-            # TODO support batch > 1
+            # TODO support batch > 1 by chunking tensors
             top_indices = top_indices.squeeze(0) # make 2D, unclear why 3
             n_hypos = top_indices.shape[1]
             score_adjustment = np.zeros(n_hypos)
             #cont_tokens = todo make this work for multiple batch size  > 1 by chunking tensors
             if rescore:  # add score adjustment according to the scorers.
-                if learn:
-                    #TODO fix so it works with one scorer
+                if learn and learn_every_token:
                     coefs = coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
+                    if not coefs.shape: # numpy makes single element arrays shapeless which makes them not iterable
+                        coefs = [coefs.item()]
                     if step % 100 == 0:
                         print("Coefs: {}".format(coefs))
                 all_raw_scores = []
                 for coef, scorer in zip(coefs, scorers):
                     # this makes an array for each scorer from calling the scorer forward function on the candidate tokens
-                    # TODO could potentially make this faster by considering shared continuation to be init_tokens
 
                     # assemble hypothesis batch
                     all_tokens = torch.cat((src_tokens, gen_tokens), dim=1) if step > 0 else src_tokens  # add the stuff generated so far to the fixed prefix
                     all_tokens = all_tokens.repeat_interleave(n_hypos, dim=0) # repeat by k of topk
                     #breakpoint()
                     hypothesis_batch = torch.cat((all_tokens, top_indices.transpose(0, 1)), dim=1) # builds a bunch of examples of src + cont toks
-                    if learn:  # add the gold example to the end as new row
+                    gold_separate = False
+                    if learn and learn_every_token:  # add the gold example to the end as new row
                         gold_example = torch.cat((src_tokens, gold_tokens), dim=1)
-                        gold_separate = False
                         if gold_example.shape[1] == hypothesis_batch.shape[1]:  # this will always be true unless the generation has become longer than the gold
                             hypothesis_batch = torch.cat((hypothesis_batch, gold_example))
                         else:
@@ -293,7 +294,7 @@ class Sampling(Search):
                     # returns a tensor of scores
                     new_scores = scorer.predict("sentence_classification_head", hypothesis_batch) # determine whether to norm scores
                     
-                    if learn and gold_separate:
+                    if learn and gold_separate and learn_every_token:
                         gold_scores = scorer.predict("sentence_classification_head", gold_example)
                         #raw_gold_scores = np.array([gs[1].data.item() for gs in gold_scores]) #for score in new_scores]) # index 1 is positive class
                         new_scores = torch.cat((new_scores, gold_scores))
@@ -323,14 +324,13 @@ class Sampling(Search):
                 probs = mod_probs.clone().exp_()
                 #print(lprobs, probs)
                 max_lprob, max_idx = lprobs.max(2)  # along second dimension
-                if learn:
+                if learn and learn_every_token:
                     gold_cont_raw_scores = all_raw_scores[-1]
                     #train coefficients with lm score of gold, best candidate score, and continuation scores for gold
                     loss = coef_trainer.train_coefficients(gold_lm_score, max_lprob,
                                                            gold_cont_raw_scores,
                                                            all_raw_scores[max_idx.data.item()])
-                
-                # do I need to sort? I don't think so. top_indices were in descending order and now they aren't, but we sample from them so should be fine
+
 
         # sample
         if step == 0:

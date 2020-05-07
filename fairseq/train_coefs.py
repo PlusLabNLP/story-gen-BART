@@ -74,7 +74,7 @@ count, batch = 0, 0
 bsz = args.batch_size
 avg, a_n = 0, 0  # used for tracking writing coefs
 
-with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout, open(args.scorers, 'w') as sout:
+with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
     sline = fin.readline().strip()
     slines, cont_lines = [], []
     for epoch in range(args.epochs):
