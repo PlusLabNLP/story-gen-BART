@@ -84,7 +84,7 @@ class SequenceGenerator(object):
         self.coef_trainer = coef_trainer
         self.coefs = coefs
         self.learn = learn
-        self.learn_every_token = False # controls granularity of token learning
+        self.learn_every_token = learn_every_token # controls granularity of token learning
         assert temperature > 0, '--temperature must be greater than 0'
 
         self.search = (
@@ -584,7 +584,8 @@ class SequenceGenerator(object):
             num_gold_tokens = gold_tokens.shape[1]
             reference_scorer = kwargs.get('reference_scorer')
             coefs = self.coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
-
+            if not coefs.shape: # numpy makes single element arrays shapeless which makes them not iterable
+                coefs = [coefs.item()]
             #gen_lm_score = finalized[0][0]["score"] this is untruncated
             final_tokens = finalized[0][0]["tokens"].unsqueeze(0)
             num_final_tokens = final_tokens.shape[1]
@@ -594,8 +595,9 @@ class SequenceGenerator(object):
             for coef, scorer in zip(coefs, scorers):  # get scores for generation and for gold, given source tokens
                 raw_score = scorer.predict("sentence_classification_head", final_tok_trunc)
                 gold_score = scorer.predict("sentence_classification_head", gold_tok_trunc)
-                all_raw_scores.append(raw_score[1].data.item())
-                gold_cont_raw_scores.append(gold_score[1].data.item())
+                #breakpoint()
+                all_raw_scores.append(raw_score[0][1].data.item())
+                gold_cont_raw_scores.append(gold_score[0][1].data.item())
 
             #get language model scores for gold sequence and gen sequence
             if num_final_tokens <= max_tok:
