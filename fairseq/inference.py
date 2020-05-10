@@ -12,8 +12,8 @@ from utils import load_scorers
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--infile', type=str, default='./temp/valid.txt.title+plot.tiny', help='input file')
-parser.add_argument('--outfile', type=str, default='./temp/valid.txt.title+plot.tiny.out', help='output file')
+parser.add_argument('--infile', type=str, default='./temp/val.source', help='input file')
+parser.add_argument('--outfile', type=str, default='./temp/val.hypo', help='output file')
 parser.add_argument('--apply_disc', action='store_true', help='whether to use discriminators to rescore')
 parser.add_argument('--scorers', type=str, default='checkpoint/WP_scorers.tsv', help='tsv with discriminator info')
 parser.add_argument('--batch_size', type=int, default=1)
@@ -62,7 +62,7 @@ for info in scorer_info:
     scorers.append(roberta)
 
 
-count = 1
+count = 0
 bsz = args.batch_size
 
 with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
