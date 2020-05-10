@@ -231,6 +231,7 @@ class FairseqTask(object):
         coef_trainer = getattr(args, 'coef_trainer', None)
         coefs = getattr(args, 'coefs', [])
         learn = getattr(args, 'learn', False)
+        learn_every_token = getattr(args, 'learn_every_token', False)
         if (
             sum(
                 int(cond)
@@ -286,7 +287,8 @@ class FairseqTask(object):
             verb=verb_idx,
             coef_trainer=coef_trainer,
             coefs=coefs,
-            learn=learn
+            learn=learn,
+            learn_every_token=learn_every_token
         )
 
     def train_step(self, sample, model, criterion, optimizer, ignore_grad=False):
