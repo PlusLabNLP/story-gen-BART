@@ -21,13 +21,14 @@ parser.add_argument('--ranking_loss', action='store_true')
 parser.add_argument('--lr', type=float, default=0.001)
 parser.add_argument('--split', type=str, default="<EOT>", help='first character to split on for context and continuation')
 parser.add_argument('--save_every', type=int, default=50, help='number of batches to save after')
+parser.add_argument('--accuracy_every', type=int, default=200)
 parser.add_argument('--epochs', type=int, default=3, help='number of epochs to loop over train data')
 
 
 args = parser.parse_args()
 print("Args: ", args, file=sys.stderr)
 
-os.environ['CUDA_VISIBLE_DEVICES']="2"
+os.environ['CUDA_VISIBLE_DEVICES']="1"
 
 use_cuda = torch.cuda.is_available()
 
@@ -68,7 +69,7 @@ for info in scorer_info:
     scorers.append(roberta)
 
 # learning coefficients
-coef_trainer = CoefTrainer(len(scorers), args.ranking_loss, args.lr)
+coef_trainer = CoefTrainer(len(scorers), args.ranking_loss, args.lr, args.accuracy_every)
 
 count, batch = 0, 0
 bsz = args.batch_size
@@ -89,7 +90,7 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
                                                    coef_trainer=coef_trainer,
                                                    learn_every_token=args.learn_every_token)
                 elapsed = time.time() - start_time
-                print("Seconds per batch: {}".format(elapsed * 1000))
+                print("Seconds per batch: {}".format(elapsed))
                 for hypothesis in hypotheses_batch:
                     fout.write(hypothesis.replace('\n', '') + '\n')
                     fout.flush()
@@ -113,6 +114,8 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
                     else:
                         avg += coef_trainer.weight_model.coefs.weight.data.cpu().squeeze()
                     a_n += 1
+                    if not(avg.shape):
+                        avg = avg.unsqueeze(0)
                     for s, coef in enumerate(avg.numpy() / a_n):
                         scorer_config[s][0] = str(coef)
                         out.write('%s\n' % '\t'.join(scorer_config[s]))

@@ -20,7 +20,7 @@ class StaticCoefficientModel(nn.Module):
 class CoefTrainer:
     """class for training scorer coefficients"""
 
-    def __init__(self, num_scorers, ranking_loss, lr):
+    def __init__(self, num_scorers, ranking_loss, lr, acc_every=200):
             self.weight_model = StaticCoefficientModel(num_scorers)
             self.use_ranking_loss = ranking_loss
             if self.use_ranking_loss:
@@ -29,6 +29,7 @@ class CoefTrainer:
                 self.loss = nn.MSELoss()
             self.optimizer = optim.SGD(self.weight_model.parameters(), lr=lr)
             self.total_loss, self.total_n, self.total_correct = 0, 0, 0
+            self.accuracy_every = acc_every
 
     def train_coefficients(self, truth_lm_score, candidate_lm_score, gold_cont_raw_scores, candidate_raw_scores):
             with torch.enable_grad():
@@ -36,6 +37,7 @@ class CoefTrainer:
                 #truth_lm_scores = logprobs(model, [init_tokens + true_cont_tokens]).squeeze().cpu().data.numpy()  # this will be the shape of (len input x embed dimension) where len input is init + cont
                 #truth_lm_score = sum([truth_lm_scores[i + len(init_tokens) - 1, true_cont_tokens[i]] for i in
                 #                      range(len(true_cont_tokens))])  # this is just the probability of the sequence #TODO is it necessary for init and cont tokens to be separate?
+                #breakpoint()
                 lm_scores = torch.Tensor([truth_lm_score, candidate_lm_score])  # this is the probability of the true sequence paired with the score of the best sequence. Both floats
                 # print("LM pair", lm_scores)
                 training_pair = [gold_cont_raw_scores, candidate_raw_scores]  # this is scorer scores of gold continuation, and of the best continuation. Both 1D arrays of len num scorers.
@@ -62,7 +64,7 @@ class CoefTrainer:
                 if self.use_ranking_loss and loss.data.item() == 0:
                     self.total_correct += 1  # whether or not it is correct is whether the scorer did in fact say the gold was higher rank
                 self.total_n += 1
-                if self.total_n % 200 == 0:
+                if self.total_n % self.accuracy_every == 0:
                     if self.use_ranking_loss:
                         print('Train Accuracy: %f' % (self.total_correct / self.total_n))
                     print('Loss: %f' % (self.total_loss / self.total_n))
