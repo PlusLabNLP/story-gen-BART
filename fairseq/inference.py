@@ -42,32 +42,34 @@ if use_cuda:
 
 
 ### load discriminators
-scorers = []
-coefs, scorer_info, scorer_config = load_scorers(args.scorers)
-for info in scorer_info:
-    if len(info) > 3:
-        print("too many fields (3 req): {}".format(info))
-    model_dir, checkpoint_name, data_path = info
+scorers, coefs = [], []
+if args.apply_disc:
+    coefs, scorer_info, scorer_config = load_scorers(args.scorers)
+    for info in scorer_info:
+        if len(info) > 3:
+            print("too many fields (3 req): {}".format(info))
+            model_dir, checkpoint_name, data_path = info
 
-    roberta = RobertaModel.from_pretrained(
-    model_dir,
-    checkpoint_file=checkpoint_name,
-    data_name_or_path=data_path)
+        roberta = RobertaModel.from_pretrained(
+            model_dir,
+            checkpoint_file=checkpoint_name,
+            data_name_or_path=data_path)
 
-    roberta.eval()
-    if use_cuda:
-        roberta.cuda()
-        roberta.half()
+        roberta.eval()
+        if use_cuda:
+            roberta.cuda()
+            roberta.half()
 
-    scorers.append(roberta)
+            scorers.append(roberta)
 
 
-count = 0
+count = 1
 bsz = args.batch_size
 
 with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
     sline = fin.readline().strip()
-    slines = []
+    slines = [sline]
+    print("Example Data: {}".format(sline.strip()))
     for sline in fin:
         if count % bsz == 0 and count:
             start_time = time.time()
@@ -77,13 +79,11 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
                                                rescore=args.apply_disc,
                                                coefs=coefs, scorers=scorers, dedup=args.dedup)
             elapsed = time.time() - start_time
-            print("Seconds per batch: {}".format(elapsed * 1000))
+            print("Seconds per batch: {}".format(elapsed))
             for hypothesis in hypotheses_batch:
                 fout.write(hypothesis.replace('\n', '') + '\n')
                 fout.flush()
-            slines, cont_lines = [], []
+            slines = []
 
         slines.append(sline.strip())
-        if count == 0:
-            print("Example Data: {}".format(sline.strip()))
         count += 1
