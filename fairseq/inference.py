@@ -22,7 +22,7 @@ parser.add_argument('--dedup', action='store_true')
 args = parser.parse_args()
 print("Args: ", args, file=sys.stderr)
 
-os.environ['CUDA_VISIBLE_DEVICES']="0"
+os.environ['CUDA_VISIBLE_DEVICES']="1"
 use_cuda = torch.cuda.is_available()
 
 ### load BART model
@@ -48,7 +48,7 @@ if args.apply_disc:
     for info in scorer_info:
         if len(info) > 3:
             print("too many fields (3 req): {}".format(info))
-            model_dir, checkpoint_name, data_path = info
+        model_dir, checkpoint_name, data_path = info
 
         roberta = RobertaModel.from_pretrained(
             model_dir,
