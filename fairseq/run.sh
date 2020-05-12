@@ -3,7 +3,7 @@ WARMUP_UPDATES=500
 LR=3e-05
 MAX_TOKENS=1024
 UPDATE_FREQ=16
-BART_PATH=/nas/home/tuhinc/fairseq/bart.large/model.pt
+BART_PATH=./bart.large/model.pt
 
 python train.py temp \
     --restore-file $BART_PATH \

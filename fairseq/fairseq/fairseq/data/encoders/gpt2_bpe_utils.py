@@ -136,7 +136,7 @@ class Encoder:
         return text
 
 def get_encoder(encoder_json_path, vocab_bpe_path):
-    encoder_json_path = "/nas/home/tuhinc/fairseq/encoder.json"
+    encoder_json_path = "./encoder.json"
     with open(encoder_json_path, 'r') as f:
         encoder = json.load(f)
     with open(vocab_bpe_path, 'r', encoding="utf-8") as f:
