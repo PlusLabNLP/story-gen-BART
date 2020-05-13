@@ -95,7 +95,7 @@ if __name__ == "__main__":
                                                                               args.num_freq_verbs,
                                                                              ((total_verb_toks-common_verbs)/total_verb_toks)*100))
             if args.average_over_samples:
-                print("Vocab (average per story for all stories)")
+                print("\nVocab (average per story for all stories)")
                 print("Min: {:.2f} Max: {:.2f} Mean: {:.2f}".format(min(vocab_per_story), max(vocab_per_story),
                                                                 mean(vocab_per_story)))
                 print("Unique Verbs (average per story for all stories)")
