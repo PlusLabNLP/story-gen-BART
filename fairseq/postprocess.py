@@ -13,6 +13,10 @@ def setup_argparse():
     p.add_argument('-d', dest='input_dir')
     p.add_argument('-f', dest='files', nargs='+')
     p.add_argument('--detokenize', action='store_true')
+    p.add_argument('--remove_partial', action='store_true',
+                   help="if True removes partial sentences that were truncated in generation")
+    p.add_argument('--sent_sym', default='</s>', type=str, help='if removing partial sentences, '
+                                                           'delimiting symbol')
     return p.parse_args()
 
 
@@ -22,7 +26,8 @@ def strip_chars(line: str):
     return cleanline
 
 
-def make_human_readable(files: list, detokenize: bool):
+def make_human_readable(files: list, detokenize: bool,
+                        remove_partial_sent: bool=True, sent_sym: str="</s>"):
     if detokenize:
         detokenizer = MosesDetokenizer("en")
     print("Postprocessing on {} files...".format(len(files)))
@@ -30,6 +35,8 @@ def make_human_readable(files: list, detokenize: bool):
         print("Working on: {}".format(file))
         with open(file, "r") as fin, open(file+".human_readable", "w") as fout:
             for line in fin:
+                if remove_partial_sent:
+                    line = line[:line.rfind(sent_sym)]
                 cleanline = strip_chars(line)
                 if detokenize:
                     cleanline = detokenizer(cleanline.strip().split())
@@ -46,7 +53,8 @@ if __name__ == "__main__":
     else:
         files = args.files
 
-    make_human_readable(files, detokenize=args.detokenize)
+    make_human_readable(files, detokenize=args.detokenize,
+                        remove_partial_sent=args.remove_partial, sent_sym=args.sent_sym)
 
 
 
