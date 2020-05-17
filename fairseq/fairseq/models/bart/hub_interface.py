@@ -108,8 +108,7 @@ class BARTHubInterface(nn.Module):
         input = [self.encode(sentence) for sentence in sentences]
         if gold_tokens:
             gold_tokens = [self.encode(tokens) for tokens in gold_tokens]
-        # I have literally no idea where this came from, I got it via printing
-        hypos = self.generate(input, beam, verbose, verb_idx=41632, gold_tokens=gold_tokens,
+        hypos = self.generate(input, beam, verbose, gold_tokens=gold_tokens,
                               **kwargs)
         # for x in hypos:
         #     for i in range(0, len(x["tokens"]), 2):

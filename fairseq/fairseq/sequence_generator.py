@@ -1,5 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
-#
+#1;95;0c
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import copy
@@ -31,6 +31,7 @@ class SequenceGenerator(object):
         search_strategy=None,
         dedup=False,
         verb=None,
+        banned_toks=None,
         # used for training mixture coefficients only
         coefs=None,
         coef_trainer=None,
@@ -65,6 +66,7 @@ class SequenceGenerator(object):
         self.unk = tgt_dict.unk()
         self.eos = tgt_dict.eos()
         self.verb = verb
+        self.banned_toks = banned_toks,
         self.vocab_size = len(tgt_dict)
         self.beam_size = beam_size
         # the max beam size is the dictionary size - 1, since we never select pad
@@ -373,12 +375,18 @@ class SequenceGenerator(object):
                 for bbsz_idx in range(bsz * beam_size):  # batch size & beam size
                     lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
 
+            #print("banned verb ids {}".format(self.verb))
+            #print("banned tokens: {}".format(self.banned_toks))
             if self.dedup:
                 def find_verbs(bbsz_idx):
                     np_toks = tokens[bbsz_idx].cpu().numpy()
-                    if self.verb not in np_toks:
+                    verb_idxs = []
+                    for verb in self.verb:
+                        if verb not in np_toks:
+                            continue
+                        verb_idxs.extend(np.where(np_toks == self.verb))
+                    if not verb_idxs:
                         return []
-                    verb_idxs = np.where(np_toks == self.verb)
                     #breakpoint()
                     #print(verb_idxs)
                     #print([tokens[bbsz_idx][i] for i in verb_idxs])
@@ -386,10 +394,16 @@ class SequenceGenerator(object):
                 # find all tokens that are previously used verbs, zero out their lprobs
                 # much harder to ban the whole "word" but should be able to just ban the first token since that effectively bans the word
                 banned_tokens = [find_verbs(bbsz_idx) for bbsz_idx in range(bsz * beam_size)]
-
                 #print(banned_tokens)
+                for bbsz_idx in range(bsz * beam_size):  # batch size & beam size                                                                                                                          
+                    lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
+
+            if self.banned_toks:
+                banned_tokens = [self.banned_toks[0] for bbsz_idx in range(bsz * beam_size)]
                 for bbsz_idx in range(bsz * beam_size):  # batch size & beam size
                     lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
+
+
             # calculate gold token language model score
             if self.learn and self.learn_every_token:
                 # Have not tested this with beam > 1, some of the truncation might not work
@@ -430,6 +444,7 @@ class SequenceGenerator(object):
 
             # the self.search.step actually only returns the top thing that you need. So we pass in src_tokens and tgt_tokens (so far) to be able to use discriminators in the search
             # in kwargs will be all the other things we need
+            # print(kwargs)
             cand_scores, cand_indices, cand_beams = self.search.step(
                 step,
                 lprobs.view(bsz, -1, self.vocab_size),

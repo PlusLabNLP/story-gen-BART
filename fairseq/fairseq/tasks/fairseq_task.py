@@ -227,7 +227,8 @@ class FairseqTask(object):
         match_source_len = getattr(args, 'match_source_len', False)
         diversity_rate = getattr(args, 'diversity_rate', -1)
         dedup = getattr(args, 'dedup', False)
-        verb_idx = getattr(args, 'verb_idx')
+        verb_idxs = getattr(args, 'verb_idxs', [])
+        banned_toks = getattr(args, 'banned_toks', [])
         coef_trainer = getattr(args, 'coef_trainer', None)
         coefs = getattr(args, 'coefs', [])
         learn = getattr(args, 'learn', False)
@@ -284,7 +285,8 @@ class FairseqTask(object):
             no_repeat_ngram_size=getattr(args, 'no_repeat_ngram_size', 0),
             search_strategy=search_strategy,
             dedup=dedup,
-            verb=verb_idx,
+            verb=verb_idxs,
+            banned_toks=banned_toks,
             coef_trainer=coef_trainer,
             coefs=coefs,
             learn=learn,
