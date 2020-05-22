@@ -116,6 +116,20 @@ class BARTHubInterface(nn.Module):
         #         print(this, self.decode(this))
         return [self.decode(x['tokens']) for x in hypos]
 
+    def score_sequence(self, src_sents: List[str], tgt_sents: List[str], **kwargs):
+        gen_args = copy.copy(self.args)
+        setattr(gen_args, "score_reference", True)
+        reference_scorer = self.task.build_generator(gen_args)
+
+        src_sent_ids = [self.encode(sentence) for sentence in src_sents] # makes longtensors
+        tgt_sent_ids = [self.encode(sentence) for sentence in tgt_sents]
+        sample = self._build_sample(src_sent_ids)
+        sample["net_input"]["prev_output_tokens"] = tgt_sent_ids[0].unsqueeze(0)
+        sample["target"] = tgt_sent_ids[0].unsqueeze(0) # if larger beam have to stack the tensor rather than just 0 index :p
+        seq_score = reference_scorer.generate([self.model], sample)
+        #lm_score = seq_score[0][0]["score"]
+        return seq_score[0][0]["score"].data.item()
+
     def generate(self, tokens: List[torch.LongTensor], beam: int = 5, verbose: bool = False, **kwargs) -> torch.LongTensor:
         sample = self._build_sample(tokens)
         # for coefficient training need gold tokens
