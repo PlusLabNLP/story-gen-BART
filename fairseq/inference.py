@@ -19,6 +19,7 @@ parser.add_argument('--scorers', type=str, default='checkpoint/WP_scorers.tsv', 
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--dedup', action='store_true')
 parser.add_argument('--banned_tok', nargs='+', default=["[", " [", "UN", " UN"], help="tokens to prevent generating")
+parser.add_argument('--max_len', type=int, default=250, help="max length of generation in BPE tok") 
 
 args = parser.parse_args()
 print("Args: ", args, file=sys.stderr)
@@ -88,7 +89,7 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
             start_time = time.time()
             with torch.no_grad():
                 hypotheses_batch = bart.sample(slines, sampling=True, sampling_topk=5, lenpen=2.0,
-                                               max_len_b=250, min_len=55, no_repeat_ngram_size=3,
+                                               max_len_b=args.max_len, min_len=55, no_repeat_ngram_size=3,
                                                rescore=args.apply_disc,
                                                coefs=coefs, scorers=scorers, dedup=args.dedup, 
                                                banned_toks=banned_ids, verb_idxs=banned_verbs)
@@ -104,7 +105,7 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
     if slines != []:
         with torch.no_grad():
             hypotheses_batch = bart.sample(slines, sampling=True, sampling_topk=5, lenpen=2.0,
-                                               max_len_b=250, min_len=55, no_repeat_ngram_size=3,
+                                               max_len_b=args.max_len, min_len=55, no_repeat_ngram_size=3,
                                                rescore=args.apply_disc,
                                                coefs=coefs, scorers=scorers, dedup=args.dedup,
                                                banned_toks=banned_ids, verb_idxs=banned_verbs)
