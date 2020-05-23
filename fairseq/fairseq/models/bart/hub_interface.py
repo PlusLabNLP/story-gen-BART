@@ -15,6 +15,7 @@ from typing import List
 
 from fairseq import utils
 from fairseq.data import encoders
+from fairseq.data.data_utils import collate_tokens
 from fairseq.sequence_scorer import SequenceScorer
 
 
@@ -124,8 +125,10 @@ class BARTHubInterface(nn.Module):
         src_sent_ids = [self.encode(sentence) for sentence in src_sents] # makes longtensors
         tgt_sent_ids = [self.encode(sentence) for sentence in tgt_sents]
         sample = self._build_sample(src_sent_ids)
-        sample["net_input"]["prev_output_tokens"] = tgt_sent_ids[0].unsqueeze(0)
-        sample["target"] = tgt_sent_ids[0].unsqueeze(0) # if larger beam have to stack the tensor rather than just 0 index :p
+        eos_idx, pad_idx = self.model.decoder.dictionary.eos_index, self.model.decoder.dictionary.pad_index
+        # TODO don't hardcode cuda
+        sample["net_input"]["prev_output_tokens"] = collate_tokens(tgt_sent_ids, pad_idx, eos_idx, move_eos_to_beginning=True).cuda()
+        sample["target"] = collate_tokens(tgt_sent_ids, pad_idx, eos_idx).cuda() # if larger beam have to stack the tensor rather than just 0 index :p
         seq_score = reference_scorer.generate([self.model], sample)
         #lm_score = seq_score[0][0]["score"]
         return seq_score[0][0]["score"].data.item()
@@ -136,6 +139,8 @@ class BARTHubInterface(nn.Module):
         gold_toks = kwargs.get("gold_tokens")
         gold_sample = self._build_sample(gold_toks) if gold_toks else None
         if gold_sample:
+            eos_idx, pad_idx = self.model.decoder.dictionary.eos_index, self.model.decoder.dictionary.pad_index
+            gold_sample["net_input"]["prev_output_tokens"] = collate_tokens(kwargs.get("gold_tokens"), pad_idx, eos_idx, move_eos_to_beginning=True)
             kwargs["gold_sample"] = gold_sample
             kwargs["gold_tokens"] = gold_sample.get('net_input').get('src_tokens')
         # build generator using current args as well as any kwargs
