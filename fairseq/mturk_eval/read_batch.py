@@ -2,8 +2,11 @@ import argparse
 import csv
 import itertools
 import os
+import re
 import sys
 from collections import defaultdict
+from typing import Tuple
+
 import numpy as np
 
 from make_batch import RELEVANCE_HEADERS
@@ -33,6 +36,14 @@ class Score:
         if not self.total:
             return 0
         return self.none/self.total
+
+class Rating:
+
+    def __init__(self, source, ratings=[]):
+        """has a source string and scores it tracks"""
+        self.source = source
+        self.ratings = ratings
+
 
 def validate_same_num_scores(list_of_lists):
     lengths = set(map(len,list_of_lists))
@@ -77,9 +88,26 @@ def get_ordered_experiment_scores(title_exp_scores, skip_hard=False, majority=Fa
     print("{} number of experiments were hard".format(hard_experiments), file=sys.stderr)
     return exp2scores
 
-def process_title_matching_results(files: list):
+# def process_story_ranking_data(files):
+#     type_metric_scores = defaultdict(lambda: defaultdict(list))
+#     title_type_metric_scores = defaultdict(lambda: defaultdict(list))
+#     winners = []
+#     for file in files:
 
-    all_scores = {t: Score(t) for t in ALL_TYPES}
+
+
+
+def get_choices(user_choice: str, correct_choice:str) -> Tuple[int, int]:
+    # Note: correct choice *should* be 1 indexed but is zero indexed so this fixed
+    user_int = re.findall(r"\d", user_choice)
+    if user_int:
+        user_int = int(user_int[0])
+    correct_int = int(re.findall(r"\d", correct_choice)[0]) + 1
+    return user_int, correct_int
+
+
+def process_accuracy_results(files: list, experiment: str, confidence_threshold: int=0 ):
+    all_scores = {}
     # need to pair by title for statistical significance
     title_exp_scores = defaultdict(lambda: defaultdict(list))
     #title_exp_story = defaultdict(lambda: defaultdict(list))
@@ -90,23 +118,58 @@ def process_title_matching_results(files: list):
                 # Check if row Rejected:
                 if row['AssignmentStatus'] == 'Rejected':
                     continue
-                experiment = row["Input.experiment"]
-                #story=row["Input.story"] # Used for if I need to see the story for reference
-                choice = row["Answer.selected_title"]
-                if choice == "true_title":
-                    correct = 1
-                    all_scores[experiment].correct += 1
-                elif choice == "none":
-                    #continue  #TODO for real support removing None
-                    all_scores[experiment].none += 1
-                    correct = 0
-                else:
-                    correct = 0
-                all_scores[experiment].total += 1
-                # make the title_exp_scores dict for stat significance, where true is 0 and false is 1
-                title = row["Input.title_true"]
-                title_exp_scores[title][experiment].append(correct)
-                #title_exp_story[title][experiment] = row["Input.story"]
+                if confidence_threshold and experiment != "relevance":
+                    if int(row["Answer.user_confidence"]) < confidence_threshold:
+                        continue
+                if experiment == "relevance" or experiment == "coherence":
+                    exp_source = row["Input.source"]
+                    # add exp source to score dict
+                    if exp_source not in all_scores:
+                        all_scores[exp_source] = Score(exp_source)
+                    # story=row["Input.story"] # Used for if I need to see the story for reference
+                    if experiment == "relevance":
+                        user_choice, correct_choice = get_choices(row["Answer.selected_title"], row["Input.true_title"])
+                        title = row["Input.title_{}".format(correct_choice)]
+                    else:
+                        user_choice, correct_choice = get_choices(row["Answer.user_choice"], row["Input.true_story"])
+                        title = row["Input.title"]
+
+                    if user_choice == correct_choice:
+                        correct = 1
+                        all_scores[exp_source].correct += 1
+                    elif not user_choice: # if it was None
+                        all_scores[exp_source].none += 1
+                        correct = 0
+                    else:
+                        correct = 0
+
+                    all_scores[exp_source].total += 1
+                    # make the title_exp_scores dict for stat significance
+                    title_exp_scores[title][exp_source].append(correct)
+                    # title_exp_story[title][experiment] = row["Input.story"]
+
+                elif experiment == "overall":
+                    title = row["Input.title"]
+                    both_sources = {row["Input.story_1_source"], row["Input.story_2_source"]}
+                    user_choice = row["Answer.user_choice"]
+                    user_choice_source = row["Input.{}_source".format(user_choice)] if user_choice != "none" else None # this will be bogus if answer is none but it doesn't matter
+                    for exp_source in both_sources:
+                        if exp_source not in all_scores:
+                            all_scores[exp_source] = Score(exp_source)
+                        if user_choice == "none":
+                            all_scores[exp_source].none += 1
+                            correct = 0
+                        elif exp_source == user_choice_source:
+                            all_scores[exp_source].correct += 1
+                            correct = 1
+                        else:
+                            correct = 0
+
+                        all_scores[exp_source].total += 1
+                        # make the title_exp_scores dict for stat significance
+                        title_exp_scores[title][exp_source].append(correct)
+                        # title_exp_story[title][experiment] = row["Input.story"]
+
         ## Print Results
     for score in sorted(all_scores.values(), key=lambda s:s.source):
         print("Type: {}\n"
@@ -136,7 +199,8 @@ def setup_argparse():
     p = argparse.ArgumentParser()
     p.add_argument('-f', dest='files', nargs='+', help='files to read in')
     p.add_argument('-d', dest='input_dir')
-    p.add_argument('-t', dest='type', choices=['relevance', 'coherence', 'overall'])
+    p.add_argument('-t', dest='type', choices=['relevance', 'coherence', 'overall', "rating"])
+    p.add_argument('--confidence_threshold', type=int, default=0, help="throw out scores with confidence lower than this number")
     return p.parse_args()
 
 
@@ -153,7 +217,7 @@ if __name__ == "__main__":
 
     if args.type == "relevance":
 
-        title_exp_scores, raw_scores = process_title_matching_results(files)
+        title_exp_scores, raw_scores = process_accuracy_results(files, "relevance", args.confidence_threshold)
         # get_titles_with_high_scores(title_exp_scores)
         # exp2scores = get_ordered_experiment_scores(title_exp_scores, skip_hard=args.skip_hard,
         #                                            majority=args.majority)
@@ -171,9 +235,13 @@ if __name__ == "__main__":
         #     print("Experiment: {} Stat: {} P: {}".format(exp, stat, p))
 
     elif args.type == "overall":
-        pass
-        #"Input.story_1_source", "Input.story_2_source" for mappings
+        title_exp_scores, raw_scores = process_accuracy_results(files, "overall", args.confidence_threshold)
 
+    elif args.type == "coherence":
+        title_exp_scores, raw_scores = process_accuracy_results(files, "coherence", args.confidence_threshold)
+
+    elif args.type == "rating":
+        pass
 
 
 

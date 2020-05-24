@@ -13,7 +13,7 @@ RELEVANCE_HEADERS = ["story", "title_1", "title_2", "title_3", "true_title", "so
 OVERALL_HEADERS = ["title", "story_1", "story_2", "story_1_source", "story_2_source"]
 RATING_HEADERS = ["title", "story_1", "story_2", "story_3", "story_4",
                   "story_1_source", "story_2_source", "story_3_source", "story_4_source"]
-COHERENCE_HEADERS = ["story_1", "story_2", "true_story"]
+COHERENCE_HEADERS = ["story_1", "story_2", "true_story", "source", "title"]
 
 
 def clean_stories(stories: list) -> list:
@@ -101,6 +101,16 @@ if __name__ == "__main__":
                 out_csv.writerow(new_row)
         else:
             out_csv.writerow(COHERENCE_HEADERS)
+            idxs = [0,1]
+            with open(args.shuffled_stories[0], "r") as fin:
+                shuffled = fin.readlines()
+            for i in range(num_samples):
+                these_stories = [stories[i].strip(), shuffled[i].strip()]
+                if args.randomize:
+                    random.shuffle(idxs)
+                true_story = "story_{}".format(idxs.index(0))
+                new_row = [these_stories[idxs[0]], these_stories[idxs[1]], true_story, titles[i].strip()]
+                out_csv.writerow(new_row)
 
 
 
