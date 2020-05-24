@@ -137,10 +137,16 @@ class BARTHubInterface(nn.Module):
         sample = self._build_sample(tokens)
         # for coefficient training need gold tokens
         gold_toks = kwargs.get("gold_tokens")
-        gold_sample = self._build_sample(gold_toks) if gold_toks else None
+        gold_sample = self._build_sample(tokens) if gold_toks else None
         if gold_sample:
             eos_idx, pad_idx = self.model.decoder.dictionary.eos_index, self.model.decoder.dictionary.pad_index
-            gold_sample["net_input"]["prev_output_tokens"] = collate_tokens(kwargs.get("gold_tokens"), pad_idx, eos_idx, move_eos_to_beginning=True)
+            shifted_gold, gold = collate_tokens(kwargs.get("gold_tokens"), pad_idx, eos_idx, move_eos_to_beginning=True), collate_tokens(kwargs.get("gold_tokens"), pad_idx, eos_idx)
+            if self.args.cpu:
+                gold_sample["net_input"]["prev_output_tokens"] = shifted_gold
+                gold_sample = gold
+            else:
+                gold_sample["net_input"]["prev_output_tokens"] = shifted_gold.cuda()
+                gold_sample = gold.cuda()
             kwargs["gold_sample"] = gold_sample
             kwargs["gold_tokens"] = gold_sample.get('net_input').get('src_tokens')
         # build generator using current args as well as any kwargs

@@ -407,10 +407,12 @@ class SequenceGenerator(object):
             # calculate gold token language model score
             if self.learn and self.learn_every_token:
                 # Have not tested this with beam > 1, some of the truncation might not work
-                gold_tokens = kwargs.get('gold_sample').get('net_input').get('src_tokens')
+                gold_sample = kwargs.get('gold_sample')
+                gold_tokens = gold_sample.get('target')
                 shift_gold_tokens = kwargs.get('gold_sample').get('net_input').get("prev_output_tokens")
                 num_gold_tokens = gold_tokens.shape[1]
                 num_shift = shift_gold_tokens.shape[1]
+                print(num_gold_tokens, num_shift)
                 reference_scorer = kwargs.get('reference_scorer')
 
                 # gold_input = {
@@ -423,16 +425,15 @@ class SequenceGenerator(object):
                 #print(type(gold_tokens))
                 gold_tokens_trunc = gold_tokens[:, :gold_length]  # model expects 2D
                 shift_gold_trunc = shift_gold_tokens[:, :shift_length]
-                #
-                gold_sample = copy.copy(sample)
                 #gold_input["src_lengths"] = torch.tensor(src_lengths.data.item() + gold_length).unsqueeze(0)  # src_lengths is dim 1, as list of length for the batch
                 #gold_input["src_tokens"] = torch.cat((src_tokens, gold_tokens_trunc), dim=1)  # this should be 1D tensor of length of src_lengths
 
                 #gold_sample = {"net_input": [src_tokens, src_lengths,  torch.tensor([2]).unsqueeze(0)]}
-                gold_sample["net_input"]["prev_output_tokens"] = shift_gold_trunc #torch.LongTensor([2]).unsqueeze(0)
-                gold_sample['target'] = gold_tokens_trunc
-                breakpoint()
-                seq_score = reference_scorer.generate(model.models, gold_sample)
+                trunc_gold_sample = copy.copy(gold_sample)
+                trunc_gold_sample["net_input"]["prev_output_tokens"] = shift_gold_trunc #torch.LongTensor([2]).unsqueeze(0)
+                trunc_gold_sample['target'] = gold_tokens_trunc
+                #breakpoint()
+                seq_score = reference_scorer.generate(model.models, trunc_gold_sample)
                  # gold_encoder_outs = model.forward_encoder(gold_input)
                  # # nothing about the ordering is dependent on the tokens, so can use new_order from original forward
                  # gold_encoder_outs = model.reorder_encoder_out(gold_encoder_outs, new_order)
