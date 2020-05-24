@@ -600,7 +600,8 @@ class SequenceGenerator(object):
         if self.learn and not self.learn_every_token:  # only train on completed sequence TODO normalise LM scores by length? Or just truncate...
             all_raw_scores, gold_cont_raw_scores = [], []
             scorers = kwargs.get("scorers", [])
-            gold_tokens = kwargs.get('gold_sample').get('net_input').get('src_tokens')
+            gold_sample = kwargs.get('gold_sample')
+            gold_tokens = gold_sample.get('target')
             num_gold_tokens = gold_tokens.shape[1]
             reference_scorer = kwargs.get('reference_scorer')
             coefs = self.coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
@@ -609,30 +610,29 @@ class SequenceGenerator(object):
             #gen_lm_score = finalized[0][0]["score"] this is untruncated
             final_tokens = finalized[0][0]["tokens"].unsqueeze(0)
             num_final_tokens = final_tokens.shape[1]
-            max_tok = min(num_gold_tokens, num_final_tokens)
-            final_tok_trunc, gold_tok_trunc = final_tokens[:, :max_tok], gold_tokens[:, :max_tok]
-
+            #max_tok = min(num_gold_tokens, num_final_tokens)
+            #final_tok_trunc, gold_tok_trunc = final_tokens[:, :max_tok], gold_tokens[:, :max_tok]
             for coef, scorer in zip(coefs, scorers):  # get scores for generation and for gold, given source tokens
-                raw_score = scorer.predict("sentence_classification_head", final_tok_trunc)
-                gold_score = scorer.predict("sentence_classification_head", gold_tok_trunc)
+                raw_score = scorer.predict("sentence_classification_head", final_tokens) #final_tok_trunc)
+                gold_score = scorer.predict("sentence_classification_head", gold_tokens) #gold_tok_trunc)
                 #breakpoint()
                 all_raw_scores.append(raw_score[0][1].data.item())
                 gold_cont_raw_scores.append(gold_score[0][1].data.item())
 
             #get language model scores for gold sequence and gen sequence
-            if num_final_tokens <= max_tok:
-                gen_lm_score = finalized[0][0]["score"]
-            else:
-                # TODO make this a function as it is repeated code
-                gen_sample = copy.copy(sample)
-                gen_sample["net_input"]["prev_output_tokens"] = final_tok_trunc
-                gen_sample["target"] = final_tok_trunc
-                seq_score = reference_scorer.generate(model.models, gen_sample)
-                gen_lm_score = seq_score[0][0]["score"]
-
-            gold_sample = copy.copy(sample)
-            gold_sample["net_input"]["prev_output_tokens"] = gold_tok_trunc
-            gold_sample['target'] = gold_tok_trunc
+            #if num_final_tokens <= max_tok:
+            #    gen_lm_score = finalized[0][0]["score"]
+            #else: #TODO I might not have to do the truncation since the logprobs are normalised anyway?
+            #    # TODO make this a function as it is repeated code
+            #    gen_sample = copy.deepcopy(sample)
+            #    gen_sample["net_input"]["prev_output_tokens"] = final_tok_trunc
+            #    gen_sample["target"] = final_tok_trunc
+            #    seq_score = reference_scorer.generate(model.models, gen_sample)
+            #    gen_lm_score = seq_score[0][0]["score"]
+            breakpoint()
+            #gold_sample = copy.deepcopy(gold_sample)
+            #gold_sample["net_input"]["prev_output_tokens"] = gold_tok_trunc
+            #gold_sample['target'] = gold_tok_trunc
             seq_score = reference_scorer.generate(model.models, gold_sample)
             gold_lm_score = seq_score[0][0]["score"]
 
