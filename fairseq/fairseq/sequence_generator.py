@@ -412,7 +412,6 @@ class SequenceGenerator(object):
                 shift_gold_tokens = kwargs.get('gold_sample').get('net_input').get("prev_output_tokens")
                 num_gold_tokens = gold_tokens.shape[1]
                 num_shift = shift_gold_tokens.shape[1]
-                print(num_gold_tokens, num_shift)
                 reference_scorer = kwargs.get('reference_scorer')
 
                 # gold_input = {
@@ -427,9 +426,9 @@ class SequenceGenerator(object):
                 shift_gold_trunc = shift_gold_tokens[:, :shift_length]
                 #gold_input["src_lengths"] = torch.tensor(src_lengths.data.item() + gold_length).unsqueeze(0)  # src_lengths is dim 1, as list of length for the batch
                 #gold_input["src_tokens"] = torch.cat((src_tokens, gold_tokens_trunc), dim=1)  # this should be 1D tensor of length of src_lengths
-
+                
                 #gold_sample = {"net_input": [src_tokens, src_lengths,  torch.tensor([2]).unsqueeze(0)]}
-                trunc_gold_sample = copy.copy(gold_sample)
+                trunc_gold_sample = copy.deepcopy(gold_sample)
                 trunc_gold_sample["net_input"]["prev_output_tokens"] = shift_gold_trunc #torch.LongTensor([2]).unsqueeze(0)
                 trunc_gold_sample['target'] = gold_tokens_trunc
                 #breakpoint()
@@ -447,7 +446,7 @@ class SequenceGenerator(object):
                  # add things to kwargs for access in step
                 kwargs["gold_tokens"] = gold_tokens_trunc
                 kwargs["gold_lprobs"] = seq_score[0][0]["score"]
-
+                
             # the self.search.step actually only returns the top thing that you need. So we pass in src_tokens and tgt_tokens (so far) to be able to use discriminators in the search
             # in kwargs will be all the other things we need
             # print(kwargs)
