@@ -607,8 +607,9 @@ class SequenceGenerator(object):
             coefs = self.coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
             if not coefs.shape: # numpy makes single element arrays shapeless which makes them not iterable
                 coefs = [coefs.item()]
-            #gen_lm_score = finalized[0][0]["score"] this is untruncated
-            final_tokens = finalized[0][0]["tokens"].unsqueeze(0)
+            gen_lm_score = finalized[0][0]["score"] # this is untruncated
+            final_tokens = finalized[0][0]["tokens"].unsqueeze(0) # since it is 1D
+            shift_tokens = tokens[:, :step+1]
             num_final_tokens = final_tokens.shape[1]
             #max_tok = min(num_gold_tokens, num_final_tokens)
             #final_tok_trunc, gold_tok_trunc = final_tokens[:, :max_tok], gold_tokens[:, :max_tok]
@@ -624,11 +625,11 @@ class SequenceGenerator(object):
             #    gen_lm_score = finalized[0][0]["score"]
             #else: #TODO I might not have to do the truncation since the logprobs are normalised anyway?
             #    # TODO make this a function as it is repeated code
-            #    gen_sample = copy.deepcopy(sample)
-            #    gen_sample["net_input"]["prev_output_tokens"] = final_tok_trunc
-            #    gen_sample["target"] = final_tok_trunc
-            #    seq_score = reference_scorer.generate(model.models, gen_sample)
-            #    gen_lm_score = seq_score[0][0]["score"]
+            gen_sample = copy.deepcopy(sample)
+            gen_sample["net_input"]["prev_output_tokens"] = shift_tokens
+            gen_sample["target"] = final_tokens
+            seq_score = reference_scorer.generate(model.models, gen_sample)
+            other_gen_lm_score = seq_score[0][0]["score"]
             breakpoint()
             #gold_sample = copy.deepcopy(gold_sample)
             #gold_sample["net_input"]["prev_output_tokens"] = gold_tok_trunc
