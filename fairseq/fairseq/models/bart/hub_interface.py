@@ -140,15 +140,17 @@ class BARTHubInterface(nn.Module):
         gold_sample = self._build_sample(tokens) if gold_toks else None
         if gold_sample:
             eos_idx, pad_idx = self.model.decoder.dictionary.eos_index, self.model.decoder.dictionary.pad_index
-            shifted_gold, gold = collate_tokens(kwargs.get("gold_tokens"), pad_idx, eos_idx, move_eos_to_beginning=True), collate_tokens(kwargs.get("gold_tokens"), pad_idx, eos_idx)
             if self.args.cpu:
-                gold_sample["net_input"]["prev_output_tokens"] = shifted_gold
-                gold_sample = gold
+                shifted_gold = collate_tokens(gold_toks, pad_idx, eos_idx, move_eos_to_beginning=True)
+                gold = collate_tokens(gold_toks, pad_idx, eos_idx)
             else:
-                gold_sample["net_input"]["prev_output_tokens"] = shifted_gold.cuda()
-                gold_sample = gold.cuda()
+                shifted_gold = collate_tokens(gold_toks, pad_idx, eos_idx, move_eos_to_beginning=True).cuda()
+                gold = collate_tokens(gold_toks, pad_idx, eos_idx).cuda()
+
+            gold_sample["net_input"]["prev_output_tokens"] = shifted_gold
+            gold_sample["target"] = gold
             kwargs["gold_sample"] = gold_sample
-            kwargs["gold_tokens"] = gold_sample.get('net_input').get('src_tokens')
+            kwargs["gold_tokens"] = gold # TODO this is redundant now
         # build generator using current args as well as any kwargs
         gen_args = copy.copy(self.args)
         gen_args.beam = beam
