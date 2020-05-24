@@ -602,12 +602,12 @@ class SequenceGenerator(object):
             scorers = kwargs.get("scorers", [])
             gold_sample = kwargs.get('gold_sample')
             gold_tokens = gold_sample.get('target')
-            num_gold_tokens = gold_tokens.shape[1]
+            #num_gold_tokens = gold_tokens.shape[1]
             reference_scorer = kwargs.get('reference_scorer')
             coefs = self.coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
             if not coefs.shape: # numpy makes single element arrays shapeless which makes them not iterable
                 coefs = [coefs.item()]
-            gen_lm_score = finalized[0][0]["score"] # this is untruncated
+            #gen_lm_score = finalized[0][0]["score"] # this is untruncated why is this not the gen_lm_score?
             final_tokens = finalized[0][0]["tokens"].unsqueeze(0) # since it is 1D
             shift_tokens = tokens[:, :step+1]
             num_final_tokens = final_tokens.shape[1]
@@ -629,11 +629,8 @@ class SequenceGenerator(object):
             gen_sample["net_input"]["prev_output_tokens"] = shift_tokens
             gen_sample["target"] = final_tokens
             seq_score = reference_scorer.generate(model.models, gen_sample)
-            other_gen_lm_score = seq_score[0][0]["score"]
-            breakpoint()
-            #gold_sample = copy.deepcopy(gold_sample)
-            #gold_sample["net_input"]["prev_output_tokens"] = gold_tok_trunc
-            #gold_sample['target'] = gold_tok_trunc
+            gen_lm_score = seq_score[0][0]["score"]
+            #breakpoint()
             seq_score = reference_scorer.generate(model.models, gold_sample)
             gold_lm_score = seq_score[0][0]["score"]
 
