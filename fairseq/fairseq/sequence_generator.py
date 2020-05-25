@@ -430,13 +430,14 @@ class SequenceGenerator(object):
                 #gold_sample = {"net_input": [src_tokens, src_lengths,  torch.tensor([2]).unsqueeze(0)]}
                 trunc_gold_sample = copy.deepcopy(gold_sample)
                 trunc_sample = copy.deepcopy(sample)
-                trunc_sample["net_input"]["prev_output_tokens"] = tokens[:, 1:step + 1]
+                trunc_sample["net_input"]["prev_output_tokens"] = tokens[:, :step + 1]
+                trunc_sample["target"] = torch.cat((tokens[:, 1:step + 1], tokens[:,0].unsqueeze(0)),dim=1)
+
                 trunc_gold_sample["net_input"]["prev_output_tokens"] = shift_gold_trunc #torch.LongTensor([2]).unsqueeze(0)
                 trunc_gold_sample['target'] = gold_tokens_trunc
-                #breakpoint()
                 seq_score = reference_scorer.generate(model.models, trunc_gold_sample)
                 gen_seq_score = reference_scorer.generate(model.models, trunc_sample) # this will be one token less because we're generating one on the next step
-                breakpoint()
+                #breakpoint()
                  # gold_encoder_outs = model.forward_encoder(gold_input)
                  # # nothing about the ordering is dependent on the tokens, so can use new_order from original forward
                  # gold_encoder_outs = model.reorder_encoder_out(gold_encoder_outs, new_order)

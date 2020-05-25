@@ -324,9 +324,8 @@ class Sampling(Search):
             probs = mod_probs.clone().exp_()
             #print(lprobs, probs)
             max_lprob, max_idx = lprobs.max(2)  # along second dimension
-            breakpoint()
-            next_gen_lm_score = torch.logsumexp(gen_lm_score, max_lprob)
             if learn and learn_every_token:
+                next_gen_lm_score = torch.sum(torch.cat((max_lprob[0], gen_lm_score.unsqueeze(0))))
                 gold_cont_raw_scores = all_raw_scores[-1]
                 #train coefficients with lm score of gold, best candidate score, and continuation scores for gold
                 loss = coef_trainer.train_coefficients(gold_lm_score, next_gen_lm_score,
