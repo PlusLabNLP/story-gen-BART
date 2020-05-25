@@ -405,7 +405,7 @@ class SequenceGenerator(object):
 
 
             # calculate gold token language model score
-            if self.learn and self.learn_every_token:
+            if self.learn and self.learn_every_token and step > 0:
                 # Have not tested this with beam > 1, some of the truncation might not work
                 gold_sample = kwargs.get('gold_sample')
                 gold_tokens = gold_sample.get('target')
@@ -429,10 +429,14 @@ class SequenceGenerator(object):
                 
                 #gold_sample = {"net_input": [src_tokens, src_lengths,  torch.tensor([2]).unsqueeze(0)]}
                 trunc_gold_sample = copy.deepcopy(gold_sample)
+                trunc_sample = copy.deepcopy(sample)
+                trunc_sample["net_input"]["prev_output_tokens"] = tokens[:, 1:step + 1]
                 trunc_gold_sample["net_input"]["prev_output_tokens"] = shift_gold_trunc #torch.LongTensor([2]).unsqueeze(0)
                 trunc_gold_sample['target'] = gold_tokens_trunc
                 #breakpoint()
                 seq_score = reference_scorer.generate(model.models, trunc_gold_sample)
+                gen_seq_score = reference_scorer.generate(model.models, trunc_sample) # this will be one token less because we're generating one on the next step
+                breakpoint()
                  # gold_encoder_outs = model.forward_encoder(gold_input)
                  # # nothing about the ordering is dependent on the tokens, so can use new_order from original forward
                  # gold_encoder_outs = model.reorder_encoder_out(gold_encoder_outs, new_order)
@@ -446,6 +450,7 @@ class SequenceGenerator(object):
                  # add things to kwargs for access in step
                 kwargs["gold_tokens"] = gold_tokens_trunc
                 kwargs["gold_lprobs"] = seq_score[0][0]["score"]
+                kwargs["gen_lprobs"] = gen_seq_score[0][0]["score"]
                 
             # the self.search.step actually only returns the top thing that you need. So we pass in src_tokens and tgt_tokens (so far) to be able to use discriminators in the search
             # in kwargs will be all the other things we need
