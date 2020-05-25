@@ -109,6 +109,11 @@ class BARTHubInterface(nn.Module):
         input = [self.encode(sentence) for sentence in sentences]
         if gold_tokens:
             gold_tokens = [self.encode(tokens) for tokens in gold_tokens]
+            max_l = kwargs.get("max_len_b", 512) # todo also don't make this hardcoded 512
+            #breakpoint()
+            if len(gold_tokens[0]) > max_l:
+                gold_tokens = [torch.cat((gold_tokens[0][:max_l], gold_tokens[0][-1].unsqueeze(0)))] #TODO make this actually append the eos and also support more than 1
+            
         hypos = self.generate(input, beam, verbose, gold_tokens=gold_tokens,
                               **kwargs)
         # for x in hypos:
