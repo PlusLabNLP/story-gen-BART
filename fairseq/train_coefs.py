@@ -84,7 +84,7 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
                 start_time = time.time()
                 with torch.no_grad():
                     hypotheses_batch = bart.sample(slines, sampling=True, sampling_topk=5, lenpen=2.0,
-                                                   max_len_b=250, min_len=55, no_repeat_ngram_size=3,
+                                                   max_len_b=300, min_len=55, no_repeat_ngram_size=3,
                                                    rescore=True, coefs=coefs, scorers=scorers,
                                                    learn=True, dedup=args.dedup, gold_tokens=cont_lines,
                                                    coef_trainer=coef_trainer,
