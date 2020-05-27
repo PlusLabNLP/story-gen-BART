@@ -45,24 +45,24 @@ if __name__ == "__main__":
         bart.cuda()  # remove this line if not running with cuda
         bart.half()  # doesn't work with CPU
 
-    if args.ranking:
+    if args.ranking or args.both:
         with open(args.gold, "r") as fin:
             gold_stories = fin.readlines()
-            if args.data_type == "story":  # story probabilities are the intermediate representation as well as the story rep
-                gold_titles, gold_plots = [], []
-                for line in gold_stories:
-                    gold_title, gold_plot = line.strip().split(title_plot_sep)
-                    gold_titles.append(gold_title)
-                    gold_plots.append(gold_plot)
+            # if args.data_type == "story":  # story probabilities are the intermediate representation as well as the story rep
+            #     gold_titles, gold_plots = [], []
+            #     for line in gold_stories:
+            #         gold_title, gold_plot = line.strip().split(title_plot_sep)
+            #         gold_titles.append(gold_title)
+            #         gold_plots.append(gold_plot)
 
     with open(args.cond_data, "r") as fin:
         cond_data = fin.readlines()
-        if args.data_type == "story": # story probabilities are the intermediate representation as well as the story rep
-            titles, plots = [], []
-            for line in cond_data:
-                title, plot = line.strip().split(title_plot_sep)
-                titles.append(title)
-                plots.append(plot)
+        # if args.data_type == "story": # story probabilities are the intermediate representation as well as the story rep
+        #     titles, plots = [], []
+        #     for line in cond_data:
+        #         title, plot = line.strip().split(title_plot_sep)
+        #         titles.append(title)
+        #         plots.append(plot)
 
 
     for file in args.gen_data:
@@ -83,34 +83,26 @@ if __name__ == "__main__":
                             gold_win += 1
                         else:
                             gen_win += 1
-        if args.data_type == "story":
-            plot_scores = []
-            for i in range(len(titles)):
-                with torch.no_grad():
-                    score = bart.score_sequence([titles[i].strip()], [plots[i].strip()])
-                    plot_scores.append(score)
-            if args.ranking or args.both:
-                gold_plot_scores = []
-                for i in range(len(gold_titles)):
-                    with torch.no_grad():
-                        gold_score = bart.score_sequence([gold_titles[i].strip()], [gold_plots[i].strip()])
-                        gold_plot_scores.append(gold_score)
+        # if args.data_type == "story":
+        #     plot_scores = []
+        #     for i in range(len(titles)):
+        #         with torch.no_grad():
+        #             score = bart.score_sequence([titles[i].strip()], [plots[i].strip()])
+        #             plot_scores.append(score)
+        #     if args.ranking or args.both:
+        #         gold_plot_scores = []
+        #         for i in range(len(gold_titles)):
+        #             with torch.no_grad():
+        #                 gold_score = bart.score_sequence([gold_titles[i].strip()], [gold_plots[i].strip()])
+        #                 gold_plot_scores.append(gold_score)
 
 
         if args.ranking or args.both:
             print("Generated ranked above gold: {:.2f}".format(gen_win/(gold_win+gen_win)))
 
-            if args.data_type == "story":
-                print("Mean probability of gold plots and of stories respectively: "
-                      "{:.2f} {:.2f}".format(np.mean(gold_plot_scores), np.mean(all_gold_scores)))
-            else:
-                print("Mean conditional probability of gold sequences: {:.2f}".format(
+            print("Mean conditional probability of gold sequences: {:.2f}".format(
                     np.mean(all_gold_scores)))
 
-
-        if args.data_type == "story":
-            print("Mean probability of generated plots and of stories respectively: "
-                  "{:.2f} {:.2f}".format(np.mean(plot_scores), np.mean(all_scores)))
         else:
             print("Mean conditional probability of generated sequences: {:.2f}".format(np.mean(all_scores)))
 
