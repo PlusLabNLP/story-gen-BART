@@ -13,7 +13,7 @@ RELEVANCE_HEADERS = ["story", "title_1", "title_2", "title_3", "true_title", "so
 OVERALL_HEADERS = ["title", "story_1", "story_2", "story_1_source", "story_2_source"]
 RATING_HEADERS = ["title", "story_1", "story_2", "story_3", "story_4",
                   "story_1_source", "story_2_source", "story_3_source", "story_4_source"]
-COHERENCE_HEADERS = []
+COHERENCE_HEADERS = ["story_1", "story_2", "true_story", "source", "title"]
 
 
 def clean_stories(stories: list) -> list:
@@ -46,9 +46,9 @@ def process_mturk_results(csv_dict, output_dict):
 def get_random_samples(samples: list, forbidden: set, num: int=2) -> list:
     chosen = random.choices(range(len(samples)), k=num)
     while set(chosen) & forbidden:
-        num_wrong = set(chosen) & forbidden
+        num_wrong = len(set(chosen) & forbidden)
         chosen = set(chosen) - forbidden
-        new_choices = random.choices(range(len(samples)), num_wrong)
+        new_choices = random.choices(range(len(samples)), k=num_wrong)
         chosen.update(new_choices)
 
     return [samples[x] for x in chosen]
@@ -59,6 +59,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument('-t', dest='type', choices=['relevance', 'coherence', 'overall', "rating"])
     p.add_argument('--stories', nargs='+', type=str)
+    p.add_argument('--shuffled_stories', nargs='+', type=str, help="for coherence, pre-shuffled stories, coindexed with ")
     p.add_argument('--titles', type=str)
     p.add_argument('--outfile', type=str)
     #p.add_argument('-e', dest='experiment', choices=["baseline", "discriminators"], help="experiment type")
@@ -79,24 +80,39 @@ if __name__ == "__main__":
     out_csv = csv.writer(open(args.outfile, 'w', newline='', ))
     print("Working on {} lines in {}".format(num_samples, args.outfile))
 
-    if args.type == "relevance":
+    if args.type == "relevance" or args.type == "coherence":
         infile = args.stories[0] # only one if relevance
+        source = os.path.split(infile)[1]
         with open(infile, "r") as story_in: # assume one file TODO fix this
             stories = story_in.readlines()
 
-        out_csv.writerow(RELEVANCE_HEADERS)
-        source = os.path.split(infile)[1]
-        idxs = list(range(3))
-        for i in range(num_samples):
-            sample_titles = [titles[i]]
-            sample_titles.extend(get_random_samples(titles, {i}, 2)) # 0 will be gold rest will be random
-            if args.randomize:
-                random.shuffle(idxs)
-            true_title = "title_{}".format(idxs.index(0))
-            new_row = [stories[i].strip(), sample_titles[idxs[0]].strip(),
-                       sample_titles[idxs[1]].strip(), sample_titles[idxs[2]].strip(),
-                       true_title, source]
-            out_csv.writerow(new_row)
+        if args.type == "relevance":
+            out_csv.writerow(RELEVANCE_HEADERS)
+            idxs = list(range(3))
+            for i in range(num_samples):
+                sample_titles = [titles[i]]
+                sample_titles.extend(get_random_samples(titles, {i}, 2)) # 0 will be gold rest will be random
+                if args.randomize:
+                    random.shuffle(idxs)
+                true_title = "title_{}".format(idxs.index(0))
+                new_row = [stories[i].strip(), sample_titles[idxs[0]].strip(),
+                           sample_titles[idxs[1]].strip(), sample_titles[idxs[2]].strip(),
+                           true_title, source]
+                out_csv.writerow(new_row)
+        else:
+            out_csv.writerow(COHERENCE_HEADERS)
+            idxs = [0,1]
+            with open(args.shuffled_stories[0], "r") as fin:
+                shuffled = fin.readlines()
+            for i in range(num_samples):
+                these_stories = [stories[i].strip(), shuffled[i].strip()]
+                if args.randomize:
+                    random.shuffle(idxs)
+                true_story = "story_{}".format(idxs.index(0))
+                new_row = [these_stories[idxs[0]], these_stories[idxs[1]], true_story, titles[i].strip()]
+                out_csv.writerow(new_row)
+
+
 
     elif args.type == "overall":
         out_csv.writerow(OVERALL_HEADERS)
@@ -131,9 +147,6 @@ if __name__ == "__main__":
                            all_stories[idxs[2]][i].strip(), all_stories[idxs[3]][i].strip(),
                            all_sources[idxs[0]], all_sources[idxs[1]], all_sources[idxs[2]], all_sources[idxs[3]]]
                 out_csv.writerow(new_row)
-
-    elif args.type == "coherence":
-        pass
 
 
 
