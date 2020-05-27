@@ -282,6 +282,9 @@ class Sampling(Search):
                 all_tokens = all_tokens.repeat_interleave(n_hypos, dim=0) # repeat by k of topk
                 #breakpoint()
                 hypothesis_batch = torch.cat((all_tokens, top_indices.transpose(0, 1)), dim=1) # builds a bunch of examples of src + cont toks
+                
+                if hypothesis_batch.shape[1] > 512: # roberta can't take more than 512 tokens
+                    hypothesis_batch = hypothesis_batch[:,:-512]
                 gold_separate = False
                 if learn and learn_every_token:  # add the gold example to the end as new row
                     gold_example = torch.cat((src_tokens, gold_tokens), dim=1)
