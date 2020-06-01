@@ -11,9 +11,10 @@ import os
 #### Globalish things
 RELEVANCE_HEADERS = ["story", "title_1", "title_2", "title_3", "true_title", "source"]
 OVERALL_HEADERS = ["title", "story_1", "story_2", "story_1_source", "story_2_source"]
-RATING_HEADERS = ["title", "story_1", "story_2", "story_3", "story_4",
-                  "story_1_source", "story_2_source", "story_3_source", "story_4_source"]
+RATING_HEADERS = ["title", "story_1", "story_2", "story_3", "story_4", "story_5",
+                  "story_1_source", "story_2_source", "story_3_source", "story_4_source", "story_5_source"]
 COHERENCE_HEADERS = ["story_1", "story_2", "true_story", "source", "title"]
+ATTENTION_CHECK_HEADERS = ["attn_question", "true_answer"]
 
 
 def clean_stories(stories: list) -> list:
@@ -65,9 +66,11 @@ if __name__ == "__main__":
     #p.add_argument('-e', dest='experiment', choices=["baseline", "discriminators"], help="experiment type")
     p.add_argument('--num_samples', type=int, default=100)
     p.add_argument('--randomize', action='store_true')
+    p.add_argument('--attention_checks', type=str, help="file with attention checks matched to titles")
 
     #p.add_argument('-d', dest='inputdir', type=str)
     args = p.parse_args()
+    print(args)
 
     # header_base = {"title": 'title_{}', "story": 'Story{}_{}'}
     # title_story_dict = {0: defaultdict(list), 1: defaultdict(list)} # two human sets for duplication
@@ -80,6 +83,11 @@ if __name__ == "__main__":
     out_csv = csv.writer(open(args.outfile, 'w', newline='', ))
     print("Working on {} lines in {}".format(num_samples, args.outfile))
 
+    HEADERS = []
+    if args.attention_checks:
+        with open(args.attention_checks) as fin:
+            attn_checks = [line.strip().split("|") for line in fin]
+
     if args.type == "relevance" or args.type == "coherence":
         infile = args.stories[0] # only one if relevance
         source = os.path.split(infile)[1]
@@ -87,6 +95,8 @@ if __name__ == "__main__":
             stories = story_in.readlines()
 
         if args.type == "relevance":
+            if args.attention_checks:
+                RELEVANCE_HEADERS.extend(ATTENTION_CHECK_HEADERS)
             out_csv.writerow(RELEVANCE_HEADERS)
             idxs = list(range(3))
             for i in range(num_samples):
@@ -98,8 +108,12 @@ if __name__ == "__main__":
                 new_row = [stories[i].strip(), sample_titles[idxs[0]].strip(),
                            sample_titles[idxs[1]].strip(), sample_titles[idxs[2]].strip(),
                            true_title, source]
+                if args.attention_checks:
+                    new_row.extend([attn_checks[i][0].strip(), attn_checks[i][1].strip()])
                 out_csv.writerow(new_row)
         else:
+            if args.attention_checks:
+                COHERENCE_HEADERS.extend(ATTENTION_CHECK_HEADERS)
             out_csv.writerow(COHERENCE_HEADERS)
             idxs = [0,1]
             with open(args.shuffled_stories[0], "r") as fin:
@@ -110,11 +124,15 @@ if __name__ == "__main__":
                     random.shuffle(idxs)
                 true_story = "story_{}".format(idxs.index(0))
                 new_row = [these_stories[idxs[0]], these_stories[idxs[1]], true_story, titles[i].strip()]
+                if args.attention_checks:
+                    new_row.extend([attn_checks[i][0].strip(), attn_checks[i][1].strip()])
                 out_csv.writerow(new_row)
 
 
 
     elif args.type == "overall":
+        if args.attention_checks:
+            OVERALL_HEADERS.extend(ATTENTION_CHECK_HEADERS)
         out_csv.writerow(OVERALL_HEADERS)
         f1, f2 = args.stories
         with open(f1, "r") as fin1, open(f2, "r") as fin2:
@@ -126,26 +144,32 @@ if __name__ == "__main__":
                     random.shuffle(idxs)
                 new_row = [titles[i].strip(), all_stories[idxs[0]][i].strip(), all_stories[idxs[1]][i].strip(),
                            all_sources[idxs[0]], all_sources[idxs[1]]]
+                if args.attention_checks:
+                    new_row.extend([attn_checks[i][0].strip(), attn_checks[i][1].strip()])
                 out_csv.writerow(new_row)
 
     elif args.type == "rating":
+        if args.attention_checks:
+            RATING_HEADERS.extend(ATTENTION_CHECK_HEADERS)
         out_csv.writerow(RATING_HEADERS)
-        f1, f2, f3, f4 = args.stories
-        with open(f1, "r") as fin1, open(f2, "r") as fin2, open(f3, "r") as fin3, open(f4, "r") as fin4:
-            all_sources = os.path.split(f1)[1], os.path.split(f2)[1], \
-                                                         os.path.split(f3)[1], os.path.split(f4)[1]
-            all_stories = fin1.readlines(), fin2.readlines(), fin3.readlines(), fin4.readlines()
+        f1, f2, f3, f4, f5 = args.stories
+        with open(f1, "r") as fin1, open(f2, "r") as fin2, open(f3, "r") as fin3, open(f4, "r") as fin4, open(f5, "r") as fin5:
+            all_sources = os.path.split(f1)[1], os.path.split(f2)[1], os.path.split(f3)[1], \
+                          os.path.split(f4)[1], os.path.split(f5)[1]
+            all_stories = fin1.readlines(), fin2.readlines(), fin3.readlines(), fin4.readlines(), fin5.readlines()
             lengths = [len(titles), len(all_stories[0]), len(all_stories[1]),
-                       len(all_stories[2]), len(all_stories[3])]
+                       len(all_stories[2]), len(all_stories[3]), len(all_stories[4])]
             if len(set(lengths)) > 1:
                 print("Warning: not same number of titles and stories: {}".format(lengths))
-            idxs = list(range(4))
+            idxs = list(range(5))
             for i in range(num_samples):
                 if args.randomize:
                     random.shuffle(idxs)  # shuffle story order on each row
                 new_row = [titles[i].strip(), all_stories[idxs[0]][i].strip(), all_stories[idxs[1]][i].strip(),
-                           all_stories[idxs[2]][i].strip(), all_stories[idxs[3]][i].strip(),
-                           all_sources[idxs[0]], all_sources[idxs[1]], all_sources[idxs[2]], all_sources[idxs[3]]]
+                           all_stories[idxs[2]][i].strip(), all_stories[idxs[3]][i].strip(), all_stories[idxs[4]][i].strip(),
+                           all_sources[idxs[0]], all_sources[idxs[1]], all_sources[idxs[2]], all_sources[idxs[3]], all_sources[idxs[4]]]
+                if args.attention_checks:
+                    new_row.extend([attn_checks[i][0].strip(), attn_checks[i][1].strip()])
                 out_csv.writerow(new_row)
 
 

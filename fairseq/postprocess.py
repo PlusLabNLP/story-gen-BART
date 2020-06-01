@@ -13,6 +13,7 @@ def setup_argparse():
     p.add_argument('-d', dest='input_dir')
     p.add_argument('-f', dest='files', nargs='+')
     p.add_argument('--detokenize', action='store_true')
+    p.add_argument('--truncate', action='store_true')
     p.add_argument('--concat_titles', action='store_true')
     p.add_argument('--titles', type=str, help="path to title file if concat titles")
     p.add_argument('--remove_partial', action='store_true',
@@ -28,7 +29,7 @@ def strip_chars(line: str):
     return cleanline
 
 
-def make_human_readable(files: list, detokenize: bool,
+def make_human_readable(files: list, detokenize: bool, truncate: bool=False,
                         remove_partial_sent: bool=True, sent_sym: str="</s>"):
     if detokenize:
         detokenizer = MosesDetokenizer("en")
@@ -37,6 +38,8 @@ def make_human_readable(files: list, detokenize: bool,
         print("Working on: {}".format(file))
         with open(file, "r") as fin, open(file+".human_readable", "w") as fout:
             for line in fin:
+                if truncate:
+                    line = " ".join(line.strip().split()[:250])
                 if remove_partial_sent:
                     line = line[:line.rfind(sent_sym)]
                 cleanline = strip_chars(line)
@@ -67,7 +70,7 @@ if __name__ == "__main__":
     if args.concat_titles:
         concat_title_plot(args.titles, files)
     else:
-        make_human_readable(files, detokenize=args.detokenize,
+        make_human_readable(files, detokenize=args.detokenize, truncate=args.truncate,
                         remove_partial_sent=args.remove_partial, sent_sym=args.sent_sym)
 
 
