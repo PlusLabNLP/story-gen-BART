@@ -541,15 +541,12 @@ if __name__ == "__main__":
                 print("Titles in this metric: {}".format(len(m)))
             # get_titles_with_high_scores(title_exp_scores)
             metrics2exp = []
-            for metric_dict in title_exp_scores: # it will be a tuple of len num metrics
-                metrics2exp.append(get_ordered_experiment_scores(metric_dict, skip_hard=False,
-                                                       take_mean=True, majority=True))
 
-        # if args.skip_hard or args.majority:
-        #     raw_scores = [Score(exp, correct=val.count(1), total=len(val))
-        #                   for exp, val in exp2scores.items()]
-        # for score in sorted(raw_scores, key=lambda s: s.get_accuracy(), reverse=True):
-        #     print(score)
+            #TODO: Note that this below can't run stat sig becuase for some reason it doesn't do the "validate same num titles" thing accurately
+            # for metric_dict in title_exp_scores: # it will be a tuple of len num metrics
+            #     metrics2exp.append(get_ordered_experiment_scores(metric_dict, skip_hard=False,
+            #                                            take_mean=True, majority=True))
+
         if args.type != "rating":
             winner = max(raw_scores, key=lambda s: s.get_accuracy())
 
