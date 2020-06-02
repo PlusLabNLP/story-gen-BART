@@ -13,7 +13,7 @@ Use the encoder.json and dict.txt already provided as a part of the repo, since 
  
  Since this is a seq2seq task you need source and target files
   - Put in plot directory 4 files train.source, train.target, val.source, val.target
-  #sample data present
+  #sample data present in fairseq/plot
  
  Now for BPE preprocess:
   ```
@@ -60,7 +60,7 @@ Use the encoder.json and dict.txt already provided as a part of the repo, since 
  
  Since this is a seq2seq task you need source and target files
   - Put in story directory 4 files train.source, train.target, val.source, val.target
-   #sample data present
+  #sample data present in fairseq/story
 
 
  Now for BPE preprocess:
