@@ -76,7 +76,7 @@ Binarize dataset:
         --target-lang "target" \
         --trainpref "story/train.bpe" \
         --validpref "story/val.bpe" \
-        --destdir "plot/" \
+        --destdir "story/" \
         --workers 60 \
         --srcdict dict.txt \
         --tgtdict dict.txt
