@@ -5,8 +5,10 @@
 
 import math
 
+import numpy as np
 import torch
 import torch.nn as nn
+from fairseq.data.data_utils import collate_tokens
 
 
 class Search(nn.Module):
@@ -221,10 +223,21 @@ class Sampling(Search):
         trimed_probs = truncated_probs.masked_fill_(trim_mask, 0)
         return trimed_probs, truncated_indices
 
-    def step(self, step, lprobs, scores):
+    def step(self, step, lprobs, scores, src_tokens=None, gen_tokens=None, **kwargs): # src and tgt_tokens to far #TODO make sure that we get an empty tgt tokens on first pass
+        
         super()._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
         logprob = None
+
+        # use kwargs to init discriminator stuff
+        rescore = kwargs.get("rescore", "False")
+        coefs = kwargs.get("coefs", [])
+        scorers = kwargs.get("scorers", [])
+        learn = kwargs.get("learn", "False")
+        learn_every_token = kwargs.get("learn_every_token")
+        coef_trainer = kwargs.get("coef_trainer")
+        gold_tokens = kwargs.get("gold_tokens")
+        gold_lm_score = kwargs.get("gold_lprobs")
 
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
@@ -244,6 +257,82 @@ class Sampling(Search):
 
         lprobs = logprob.clone()
         #sample
+        #print("initial lprobs, probs")
+        #print(lprobs, probs)
+        if rescore:
+            # potentially rescore
+            # TODO support batch > 1 by chunking tensors
+            top_indices = top_indices.squeeze(0) # make 2D, unclear why 3
+            n_hypos = top_indices.shape[1]
+            score_adjustment = np.zeros(n_hypos)
+            #cont_tokens = todo make this work for multiple batch size  > 1 by chunking tensors
+            if rescore:  # add score adjustment according to the scorers.
+                if learn and learn_every_token:
+                    coefs = coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
+                    if not coefs.shape: # numpy makes single element arrays shapeless which makes them not iterable
+                        coefs = [coefs.item()]
+                    if step % 100 == 0:
+                        print("Coefs: {}".format(coefs))
+                all_raw_scores = []
+                for coef, scorer in zip(coefs, scorers):
+                    # this makes an array for each scorer from calling the scorer forward function on the candidate tokens
+
+                    # assemble hypothesis batch
+                    all_tokens = torch.cat((src_tokens, gen_tokens), dim=1) if step > 0 else src_tokens  # add the stuff generated so far to the fixed prefix
+                    all_tokens = all_tokens.repeat_interleave(n_hypos, dim=0) # repeat by k of topk
+                    #breakpoint()
+                    hypothesis_batch = torch.cat((all_tokens, top_indices.transpose(0, 1)), dim=1) # builds a bunch of examples of src + cont toks
+                    gold_separate = False
+                    if learn and learn_every_token:  # add the gold example to the end as new row
+                        gold_example = torch.cat((src_tokens, gold_tokens), dim=1)
+                        if gold_example.shape[1] == hypothesis_batch.shape[1]:  # this will always be true unless the generation has become longer than the gold
+                            hypothesis_batch = torch.cat((hypothesis_batch, gold_example))
+                        else:
+                            gold_separate = True
+
+                    #hypothesis_batch = collate_tokens([torch.cat((src_tokens, top_indices[i])) for i in range(len(top_indices))], pad_idx=1)
+                    # returns a tensor of scores
+                    new_scores = scorer.predict("sentence_classification_head", hypothesis_batch) # determine whether to norm scores
+                    
+                    if learn and gold_separate and learn_every_token:
+                        gold_scores = scorer.predict("sentence_classification_head", gold_example)
+                        #raw_gold_scores = np.array([gs[1].data.item() for gs in gold_scores]) #for score in new_scores]) # index 1 is positive class
+                        new_scores = torch.cat((new_scores, gold_scores))
+                    raw_scores = np.array([score[1].data.item() for score in new_scores]) # index 1 is positive class
+                    all_raw_scores.append(raw_scores)
+                    # elementwise add the new scores to the np array after elementwise multiplying by coef
+                    score_adjustment += raw_scores[:self.sampling_topk] * coef  # truncate so don't include extra stuff like gold scores if in there
+                    #if learn and gold_separate:
+                    #    new_scores = scorer.predict("sentence_classification_head", gold_example)
+                    #    raw_scores = np.array([score[1].data.item() for score in new_scores]) # index 1 is positive class
+                    #    all_raw_scores.append(raw_scores)
+                #print([scores.shape for scores in all_raw_scores])
+                all_raw_scores = np.stack(all_raw_scores, axis=-1)  # this converts to num_candidates x num_scorers so each row is all adjusted scores for a candidate. Probs necessary only for proper beam search
+
+                #if self.learn and num_cont_words < len(true_cont_tokens): # tgt_tokens should be the true cont tokens
+                
+                #print("Score Adjustment")
+                #print(score_adjustment)
+                #print("Before Disc")
+                #print(lprobs, probs)
+                
+                mod_probs = lprobs.clone()
+                for i in range(n_hypos): # unclear again why lprobs is 3D
+                    mod_probs[0][0][i] = lprobs[0][0][i] + score_adjustment[i]
+                #print("After Disc")
+                lprobs = mod_probs.clone()
+                probs = mod_probs.clone().exp_()
+                #print(lprobs, probs)
+                max_lprob, max_idx = lprobs.max(2)  # along second dimension
+                if learn and learn_every_token:
+                    gold_cont_raw_scores = all_raw_scores[-1]
+                    #train coefficients with lm score of gold, best candidate score, and continuation scores for gold
+                    loss = coef_trainer.train_coefficients(gold_lm_score, max_lprob,
+                                                           gold_cont_raw_scores,
+                                                           all_raw_scores[max_idx.data.item()])
+
+
+        # sample
         if step == 0:
             self.indices_buf = torch.multinomial(
                 probs.view(bsz, -1),

@@ -20,6 +20,16 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+class Corpus(object):
+    def __init__(self, train, val, max_len, test=None):
+        self.train = train.data
+        self.train_name = train.filename
+        self.val = val.data
+        self.val_name = val.filename
+        self.test = test.data if test else None
+        self.max_seq_len = max_len
+
+
 def infer_language_pair(path):
     """Infer language pair from filename: <split>.<lang1>-<lang2>.(...).idx"""
     src, dst = None, None

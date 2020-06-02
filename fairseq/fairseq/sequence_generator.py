@@ -1,10 +1,11 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
-#
+#1;95;0c
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+import copy
 import math
 
+import numpy as np
 import torch
 
 from fairseq import search, utils
@@ -28,6 +29,15 @@ class SequenceGenerator(object):
         match_source_len=False,
         no_repeat_ngram_size=0,
         search_strategy=None,
+        dedup=False,
+        verb=None,
+        banned_toks=None,
+        # used for training mixture coefficients only
+        coefs=None,
+        coef_trainer=None,
+        learn=False,
+        learn_every_token=False,
+
     ):
         """Generates translations of a given source sentence.
 
@@ -55,6 +65,8 @@ class SequenceGenerator(object):
         self.pad = tgt_dict.pad()
         self.unk = tgt_dict.unk()
         self.eos = tgt_dict.eos()
+        self.verb = verb
+        self.banned_toks = banned_toks,
         self.vocab_size = len(tgt_dict)
         self.beam_size = beam_size
         # the max beam size is the dictionary size - 1, since we never select pad
@@ -69,6 +81,12 @@ class SequenceGenerator(object):
         self.temperature = temperature
         self.match_source_len = match_source_len
         self.no_repeat_ngram_size = no_repeat_ngram_size
+        self.dedup = dedup
+        # used for training mixture coefficients only
+        self.coef_trainer = coef_trainer
+        self.coefs = coefs
+        self.learn = learn
+        self.learn_every_token = learn_every_token # controls granularity of token learning
         assert temperature > 0, '--temperature must be greater than 0'
 
         self.search = (
@@ -270,7 +288,7 @@ class SequenceGenerator(object):
                     reorder_state.view(-1, beam_size).add_(corr.unsqueeze(-1) * beam_size)
                 model.reorder_incremental_state(reorder_state)
                 encoder_outs = model.reorder_encoder_out(encoder_outs, reorder_state)
-
+            # this gives a distribution over vocab... but then later it zeros out everything but chosen token?
             lprobs, avg_attn_scores = model.forward_decoder(
                 tokens[:, :step + 1], encoder_outs, temperature=self.temperature,
             )
@@ -317,7 +335,7 @@ class SequenceGenerator(object):
                 lprobs[:, self.eos] = -math.inf
 
             if self.no_repeat_ngram_size > 0:
-                # for each beam and batch sentence, generate a list of previous ngrams
+                # for each beam and batch sentence, generate a list of previous ngrams (will be same length as step)
                 gen_ngrams = [{} for bbsz_idx in range(bsz * beam_size)]
                 for bbsz_idx in range(bsz * beam_size):
                     gen_tokens = tokens[bbsz_idx].tolist()
@@ -344,8 +362,9 @@ class SequenceGenerator(object):
             if self.no_repeat_ngram_size > 0:
                 def calculate_banned_tokens(bbsz_idx):
                     # before decoding the next token, prevent decoding of ngrams that have already appeared
+                    # grabs a tuple of n -1 grams, so that can look in the dict for banned continuations (e.g. if ngram = 3, then tuple will be bigrams_
                     ngram_index = tuple(tokens[bbsz_idx, step + 2 - self.no_repeat_ngram_size:step + 1].tolist())
-                    return gen_ngrams[bbsz_idx].get(ngram_index, [])
+                    return gen_ngrams[bbsz_idx].get(ngram_index, []) # returns the indices of banned continuations
 
                 if step + 2 - self.no_repeat_ngram_size >= 0:
                     # no banned tokens if we haven't generated no_repeat_ngram_size tokens yet
@@ -353,13 +372,86 @@ class SequenceGenerator(object):
                 else:
                     banned_tokens = [[] for bbsz_idx in range(bsz * beam_size)]
 
-                for bbsz_idx in range(bsz * beam_size):
+                for bbsz_idx in range(bsz * beam_size):  # batch size & beam size
                     lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
 
+            #print("banned verb ids {}".format(self.verb))
+            #print("banned tokens: {}".format(self.banned_toks))
+            if self.dedup:
+                def find_verbs(bbsz_idx):
+                    np_toks = tokens[bbsz_idx].cpu().numpy()
+                    verb_idxs = []
+                    for verb in self.verb:
+                        if verb not in np_toks:
+                            continue
+                        verb_idxs.extend(np.where(np_toks == self.verb))
+                    if not verb_idxs:
+                        return []
+                    #breakpoint()
+                    #print(verb_idxs)
+                    #print([tokens[bbsz_idx][i] for i in verb_idxs])
+                    return [tokens[bbsz_idx][i +1].item() for i in verb_idxs[bbsz_idx]] # grab the next token following a verb symbol
+                # find all tokens that are previously used verbs, zero out their lprobs
+                # much harder to ban the whole "word" but should be able to just ban the first token since that effectively bans the word
+                banned_tokens = [find_verbs(bbsz_idx) for bbsz_idx in range(bsz * beam_size)]
+                #print(banned_tokens)
+                for bbsz_idx in range(bsz * beam_size):  # batch size & beam size                                                                                                                          
+                    lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
+
+            if self.banned_toks:
+                banned_tokens = [self.banned_toks[0] for bbsz_idx in range(bsz * beam_size)]
+                for bbsz_idx in range(bsz * beam_size):  # batch size & beam size
+                    lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
+
+
+            # calculate gold token language model score
+            if self.learn and self.learn_every_token:
+                # Have not tested this with beam > 1, some of the truncation might not work
+                gold_tokens = kwargs.get('gold_sample').get('net_input').get('src_tokens')
+                num_gold_tokens = gold_tokens.shape[1]
+                reference_scorer = kwargs.get('reference_scorer')
+
+                # gold_input = {
+                #     k: v for k, v in gold_sample['net_input'].items()
+                #     if k != 'prev_output_tokens'
+                # }
+                # gold_tokens = gold_input["src_tokens"] # src_tokens is dim batch x length
+                gold_length = min(step+1, num_gold_tokens)
+                #print(type(gold_tokens))
+                gold_tokens_trunc = gold_tokens[:, :gold_length]  # model expects 2D
+                #
+                gold_sample = copy.copy(sample)
+                #gold_input["src_lengths"] = torch.tensor(src_lengths.data.item() + gold_length).unsqueeze(0)  # src_lengths is dim 1, as list of length for the batch
+                #gold_input["src_tokens"] = torch.cat((src_tokens, gold_tokens_trunc), dim=1)  # this should be 1D tensor of length of src_lengths
+
+                #gold_sample = {"net_input": [src_tokens, src_lengths,  torch.tensor([2]).unsqueeze(0)]}
+                gold_sample["net_input"]["prev_output_tokens"] = gold_tokens_trunc #torch.LongTensor([2]).unsqueeze(0)
+                gold_sample['target'] = gold_tokens_trunc
+                seq_score = reference_scorer.generate(model.models, gold_sample)
+                 # gold_encoder_outs = model.forward_encoder(gold_input)
+                 # # nothing about the ordering is dependent on the tokens, so can use new_order from original forward
+                 # gold_encoder_outs = model.reorder_encoder_out(gold_encoder_outs, new_order)
+
+                 #x = model.models[0](src_tokens, src_lengths, gold_tokens_trunc)
+                 ##x = model.models[0].extract_features(gold_input["src_lengths"], gold_input["src_tokens"], [])
+
+                 #gold_lprobs, gold_avg_attn_scores = model.forward_decoder(gold_tokens, # this used to be tokens[:, :step + 1] -- check that "tokens" wasn't anything super special
+                 #                                                   gold_encoder_outs,
+                 #                                                   temperature=self.temperature)
+                 # add things to kwargs for access in step
+                kwargs["gold_tokens"] = gold_tokens_trunc
+                kwargs["gold_lprobs"] = seq_score[0][0]["score"]
+
+            # the self.search.step actually only returns the top thing that you need. So we pass in src_tokens and tgt_tokens (so far) to be able to use discriminators in the search
+            # in kwargs will be all the other things we need
+            # print(kwargs)
             cand_scores, cand_indices, cand_beams = self.search.step(
                 step,
                 lprobs.view(bsz, -1, self.vocab_size),
                 scores.view(bsz, beam_size, -1)[:, :, :step],
+                src_tokens,
+                tokens[:, 1:step + 1],  # this is the generated tokens till now, to cut off the padding ones. The one cuts off the first bos token?
+                **kwargs
             )
 
             # cand_bbsz_idx contains beam indices for the top candidate
@@ -499,6 +591,50 @@ class SequenceGenerator(object):
         # sort by score descending
         for sent in range(len(finalized)):
             finalized[sent] = sorted(finalized[sent], key=lambda r: r['score'], reverse=True)
+
+        if self.learn and not self.learn_every_token:  # only train on completed sequence TODO normalise LM scores by length? Or just truncate...
+            all_raw_scores, gold_cont_raw_scores = [], []
+            scorers = kwargs.get("scorers", [])
+            gold_tokens = kwargs.get('gold_sample').get('net_input').get('src_tokens')
+            num_gold_tokens = gold_tokens.shape[1]
+            reference_scorer = kwargs.get('reference_scorer')
+            coefs = self.coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
+            if not coefs.shape: # numpy makes single element arrays shapeless which makes them not iterable
+                coefs = [coefs.item()]
+            #gen_lm_score = finalized[0][0]["score"] this is untruncated
+            final_tokens = finalized[0][0]["tokens"].unsqueeze(0)
+            num_final_tokens = final_tokens.shape[1]
+            max_tok = min(num_gold_tokens, num_final_tokens)
+            final_tok_trunc, gold_tok_trunc = final_tokens[:, :max_tok], gold_tokens[:, :max_tok]
+
+            for coef, scorer in zip(coefs, scorers):  # get scores for generation and for gold, given source tokens
+                raw_score = scorer.predict("sentence_classification_head", final_tok_trunc)
+                gold_score = scorer.predict("sentence_classification_head", gold_tok_trunc)
+                #breakpoint()
+                all_raw_scores.append(raw_score[0][1].data.item())
+                gold_cont_raw_scores.append(gold_score[0][1].data.item())
+
+            #get language model scores for gold sequence and gen sequence
+            if num_final_tokens <= max_tok:
+                gen_lm_score = finalized[0][0]["score"]
+            else:
+                # TODO make this a function as it is repeated code
+                gen_sample = copy.copy(sample)
+                gen_sample["net_input"]["prev_output_tokens"] = final_tok_trunc
+                gen_sample["target"] = final_tok_trunc
+                seq_score = reference_scorer.generate(model.models, gen_sample)
+                gen_lm_score = seq_score[0][0]["score"]
+
+            gold_sample = copy.copy(sample)
+            gold_sample["net_input"]["prev_output_tokens"] = gold_tok_trunc
+            gold_sample['target'] = gold_tok_trunc
+            seq_score = reference_scorer.generate(model.models, gold_sample)
+            gold_lm_score = seq_score[0][0]["score"]
+
+            loss = self.coef_trainer.train_coefficients(gold_lm_score, gen_lm_score,
+                                                   gold_cont_raw_scores,
+                                                   all_raw_scores)
+
         return finalized
 
 

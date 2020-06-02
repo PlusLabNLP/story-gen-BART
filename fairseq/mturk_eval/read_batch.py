@@ -565,11 +565,3 @@ if __name__ == "__main__":
                     stat, p = stats.wilcoxon(exp2scores[target], exp2scores[exp])
                     print("Experiment: {} Stat: {} P: {}".format(exp, stat, p))
 
-        # result_means = get_and_print_stats(exp2scores, exclude_zeros=True)
-        #
-        # # Statistical Significance Testing
-        # # doing with
-        # best_means = get_best_scores_per_metric(result_means)
-        # for best in best_means:
-        #     stat_sig(best, exp2scores, stats.wilcoxon, paired=True)
-

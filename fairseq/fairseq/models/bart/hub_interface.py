@@ -15,6 +15,7 @@ from typing import List
 
 from fairseq import utils
 from fairseq.data import encoders
+from fairseq.sequence_scorer import SequenceScorer
 
 
 logger = logging.getLogger(__name__)
@@ -102,25 +103,43 @@ class BARTHubInterface(nn.Module):
         )
         return sample
 
-    def sample(self, sentences: List[str], beam: int = 1, verbose: bool = False, **kwargs) -> str:
+    def sample(self, sentences: List[str], beam: int = 1, verbose: bool = False,
+               gold_tokens: List[str] = None, **kwargs) -> str:
         input = [self.encode(sentence) for sentence in sentences]
-        hypos = self.generate(input, beam, verbose, **kwargs)
+        if gold_tokens:
+            gold_tokens = [self.encode(tokens) for tokens in gold_tokens]
+        hypos = self.generate(input, beam, verbose, gold_tokens=gold_tokens,
+                              **kwargs)
+        # for x in hypos:
+        #     for i in range(0, len(x["tokens"]), 2):
+        #         this = x["tokens"][i:i+2]
+        #         print(this, self.decode(this))
         return [self.decode(x['tokens']) for x in hypos]
 
     def generate(self, tokens: List[torch.LongTensor], beam: int = 5, verbose: bool = False, **kwargs) -> torch.LongTensor:
         sample = self._build_sample(tokens)
-
+        # for coefficient training need gold tokens
+        gold_toks = kwargs.get("gold_tokens")
+        gold_sample = self._build_sample(gold_toks) if gold_toks else None
+        if gold_sample:
+            kwargs["gold_sample"] = gold_sample
+            kwargs["gold_tokens"] = gold_sample.get('net_input').get('src_tokens')
         # build generator using current args as well as any kwargs
         gen_args = copy.copy(self.args)
         gen_args.beam = beam
         for k, v in kwargs.items():
             setattr(gen_args, k, v)
         generator = self.task.build_generator(gen_args)
+        if kwargs.get("learn"):
+            setattr(gen_args, "score_reference", True) # so can get a sequence scorer
+            ref_scorer = self.task.build_generator(gen_args)
+            kwargs["reference_scorer"] = ref_scorer
         translations = self.task.inference_step(
             generator,
             [self.model],
             sample,
             prefix_tokens=sample['net_input']['src_tokens'].new_zeros((len(tokens), 1)).fill_(self.task.source_dictionary.bos()),
+            **kwargs
         )
 
         if verbose:

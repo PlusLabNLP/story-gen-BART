@@ -171,20 +171,3 @@ if __name__ == "__main__":
                 if args.attention_checks:
                     new_row.extend([attn_checks[i][0].strip(), attn_checks[i][1].strip()])
                 out_csv.writerow(new_row)
-
-
-
-
-
-
-
-
-
-
-
-    # for file in files:
-    #     mturk_results_data = csv.DictReader(open(file, newline=''))
-    #     process_mturk_results(mturk_results_data, title_story_dict)
-    # process_generated_results(args.genfile, title_story_dict)
-    # write_csv_file(title_story_dict, args.outfile, header_base)
-

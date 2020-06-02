@@ -226,6 +226,13 @@ class FairseqTask(object):
         diverse_beam_strength = getattr(args, 'diverse_beam_strength', 0.5),
         match_source_len = getattr(args, 'match_source_len', False)
         diversity_rate = getattr(args, 'diversity_rate', -1)
+        dedup = getattr(args, 'dedup', False)
+        verb_idxs = getattr(args, 'verb_idxs', [])
+        banned_toks = getattr(args, 'banned_toks', [])
+        coef_trainer = getattr(args, 'coef_trainer', None)
+        coefs = getattr(args, 'coefs', [])
+        learn = getattr(args, 'learn', False)
+        learn_every_token = getattr(args, 'learn_every_token', False)
         if (
             sum(
                 int(cond)
@@ -277,6 +284,13 @@ class FairseqTask(object):
             match_source_len=getattr(args, 'match_source_len', False),
             no_repeat_ngram_size=getattr(args, 'no_repeat_ngram_size', 0),
             search_strategy=search_strategy,
+            dedup=dedup,
+            verb=verb_idxs,
+            banned_toks=banned_toks,
+            coef_trainer=coef_trainer,
+            coefs=coefs,
+            learn=learn,
+            learn_every_token=learn_every_token
         )
 
     def train_step(self, sample, model, criterion, optimizer, ignore_grad=False):
@@ -312,9 +326,9 @@ class FairseqTask(object):
             loss, sample_size, logging_output = criterion(model, sample)
         return loss, sample_size, logging_output
 
-    def inference_step(self, generator, models, sample, prefix_tokens=None):
+    def inference_step(self, generator, models, sample, prefix_tokens=None, **kwargs):
         with torch.no_grad():
-            return generator.generate(models, sample, prefix_tokens=prefix_tokens)
+            return generator.generate(models, sample, prefix_tokens=prefix_tokens, **kwargs)
 
     def begin_epoch(self, epoch, model):
         """Hook function called before the start of each epoch."""
