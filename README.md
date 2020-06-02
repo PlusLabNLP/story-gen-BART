@@ -74,8 +74,8 @@ Binarize dataset:
       fairseq-preprocess \
         --source-lang "source" \
         --target-lang "target" \
-        --trainpref "plot/train.bpe" \
-        --validpref "plot/val.bpe" \
+        --trainpref "story/train.bpe" \
+        --validpref "story/val.bpe" \
         --destdir "plot/" \
         --workers 60 \
         --srcdict dict.txt \
