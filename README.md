@@ -105,11 +105,35 @@ For Inference:
     python inference.py
   ```
  
-## Train Discriminators aka Classifier aka whatever we start calling them
+Train Discriminators aka Classifier aka whatever we start calling them
+================================================
 
 To train a discriminator you will need to go through 3 steps:
 1) generate positive and negative example data
 2) compile tsv files for train and validation data
 3) finetune the discriminator for us Roberta-large
 
+Preprocess task data and it needs binary .bin files to finetune roberta:
+./examples/roberta/preprocess_GLUE_tasks.sh glue_data <glue_task_name>
+
+We use it as a proxy for RTE task (sentence pair with label 0 or 1) so recommend to use it
+
+Fine-tuning on GLUE task:
+
+Use run_disc.sh
+
+
+Finetune 4 discriminators
+
+1.0 /nas/home/fairseq/relevance-roberta/  checkpoint_best.pt  roberta.large/
+1.0 /nas/home/fairseq/eventinter-roberta  checkpoint_best.pt  roberta.large/
+1.0 /nas/home/fairseq/eventintraV-roberta checkpoint_best.pt  roberta.large/
+1.0 /nas/home/fairseq/entity-roberta  checkpoint_best.pt  roberta.large/
+
+
+Mixture Weight training
+================================================
+
+Next step is mixture coefficient training
+train_corefs.py will take care of it
 
