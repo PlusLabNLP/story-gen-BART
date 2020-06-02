@@ -125,10 +125,10 @@ Use run_disc.sh
 
 Finetune 4 discriminators
 
-1.0 /nas/home/fairseq/relevance-roberta/  checkpoint_best.pt  roberta.large/
-1.0 /nas/home/fairseq/eventinter-roberta  checkpoint_best.pt  roberta.large/
-1.0 /nas/home/fairseq/eventintraV-roberta checkpoint_best.pt  roberta.large/
-1.0 /nas/home/fairseq/entity-roberta  checkpoint_best.pt  roberta.large/
+     1.0 /nas/home/fairseq/relevance-roberta/  checkpoint_best.pt  roberta.large/
+     1.0 /nas/home/fairseq/eventinter-roberta  checkpoint_best.pt  roberta.large/
+     1.0 /nas/home/fairseq/eventintraV-roberta checkpoint_best.pt  roberta.large/
+     1.0 /nas/home/fairseq/entity-roberta  checkpoint_best.pt  roberta.large/
 
 
 Mixture Weight training
