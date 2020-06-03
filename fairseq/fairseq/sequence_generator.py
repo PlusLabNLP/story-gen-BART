@@ -405,10 +405,13 @@ class SequenceGenerator(object):
 
 
             # calculate gold token language model score
-            if self.learn and self.learn_every_token:
+            if self.learn and self.learn_every_token and step > 0:
                 # Have not tested this with beam > 1, some of the truncation might not work
-                gold_tokens = kwargs.get('gold_sample').get('net_input').get('src_tokens')
+                gold_sample = kwargs.get('gold_sample')
+                gold_tokens = gold_sample.get('target')
+                shift_gold_tokens = kwargs.get('gold_sample').get('net_input').get("prev_output_tokens")
                 num_gold_tokens = gold_tokens.shape[1]
+                num_shift = shift_gold_tokens.shape[1]
                 reference_scorer = kwargs.get('reference_scorer')
 
                 # gold_input = {
@@ -417,17 +420,24 @@ class SequenceGenerator(object):
                 # }
                 # gold_tokens = gold_input["src_tokens"] # src_tokens is dim batch x length
                 gold_length = min(step+1, num_gold_tokens)
+                shift_length = min(step+1, num_shift)
                 #print(type(gold_tokens))
                 gold_tokens_trunc = gold_tokens[:, :gold_length]  # model expects 2D
-                #
-                gold_sample = copy.copy(sample)
+                shift_gold_trunc = shift_gold_tokens[:, :shift_length]
                 #gold_input["src_lengths"] = torch.tensor(src_lengths.data.item() + gold_length).unsqueeze(0)  # src_lengths is dim 1, as list of length for the batch
                 #gold_input["src_tokens"] = torch.cat((src_tokens, gold_tokens_trunc), dim=1)  # this should be 1D tensor of length of src_lengths
-
+                
                 #gold_sample = {"net_input": [src_tokens, src_lengths,  torch.tensor([2]).unsqueeze(0)]}
-                gold_sample["net_input"]["prev_output_tokens"] = gold_tokens_trunc #torch.LongTensor([2]).unsqueeze(0)
-                gold_sample['target'] = gold_tokens_trunc
-                seq_score = reference_scorer.generate(model.models, gold_sample)
+                trunc_gold_sample = copy.deepcopy(gold_sample)
+                trunc_sample = copy.deepcopy(sample)
+                trunc_sample["net_input"]["prev_output_tokens"] = tokens[:, :step + 1]
+                trunc_sample["target"] = torch.cat((tokens[:, 1:step + 1], tokens[:,0].unsqueeze(0)),dim=1)
+
+                trunc_gold_sample["net_input"]["prev_output_tokens"] = shift_gold_trunc #torch.LongTensor([2]).unsqueeze(0)
+                trunc_gold_sample['target'] = gold_tokens_trunc
+                seq_score = reference_scorer.generate(model.models, trunc_gold_sample)
+                gen_seq_score = reference_scorer.generate(model.models, trunc_sample) # this will be one token less because we're generating one on the next step
+                #breakpoint()
                  # gold_encoder_outs = model.forward_encoder(gold_input)
                  # # nothing about the ordering is dependent on the tokens, so can use new_order from original forward
                  # gold_encoder_outs = model.reorder_encoder_out(gold_encoder_outs, new_order)
@@ -441,7 +451,8 @@ class SequenceGenerator(object):
                  # add things to kwargs for access in step
                 kwargs["gold_tokens"] = gold_tokens_trunc
                 kwargs["gold_lprobs"] = seq_score[0][0]["score"]
-
+                kwargs["gen_lprobs"] = gen_seq_score[0][0]["score"]
+                
             # the self.search.step actually only returns the top thing that you need. So we pass in src_tokens and tgt_tokens (so far) to be able to use discriminators in the search
             # in kwargs will be all the other things we need
             # print(kwargs)
@@ -595,39 +606,37 @@ class SequenceGenerator(object):
         if self.learn and not self.learn_every_token:  # only train on completed sequence TODO normalise LM scores by length? Or just truncate...
             all_raw_scores, gold_cont_raw_scores = [], []
             scorers = kwargs.get("scorers", [])
-            gold_tokens = kwargs.get('gold_sample').get('net_input').get('src_tokens')
-            num_gold_tokens = gold_tokens.shape[1]
+            gold_sample = kwargs.get('gold_sample')
+            gold_tokens = gold_sample.get('target')
+            #num_gold_tokens = gold_tokens.shape[1]
             reference_scorer = kwargs.get('reference_scorer')
             coefs = self.coef_trainer.weight_model.coefs.weight.data.cpu().squeeze().numpy()
             if not coefs.shape: # numpy makes single element arrays shapeless which makes them not iterable
                 coefs = [coefs.item()]
-            #gen_lm_score = finalized[0][0]["score"] this is untruncated
-            final_tokens = finalized[0][0]["tokens"].unsqueeze(0)
+            #gen_lm_score = finalized[0][0]["score"] # this is untruncated why is this not the gen_lm_score?
+            final_tokens = finalized[0][0]["tokens"].unsqueeze(0) # since it is 1D
+            shift_tokens = tokens[:, :step+1]
             num_final_tokens = final_tokens.shape[1]
-            max_tok = min(num_gold_tokens, num_final_tokens)
-            final_tok_trunc, gold_tok_trunc = final_tokens[:, :max_tok], gold_tokens[:, :max_tok]
-
+            #max_tok = min(num_gold_tokens, num_final_tokens)
+            #final_tok_trunc, gold_tok_trunc = final_tokens[:, :max_tok], gold_tokens[:, :max_tok]
             for coef, scorer in zip(coefs, scorers):  # get scores for generation and for gold, given source tokens
-                raw_score = scorer.predict("sentence_classification_head", final_tok_trunc)
-                gold_score = scorer.predict("sentence_classification_head", gold_tok_trunc)
+                raw_score = scorer.predict("sentence_classification_head", final_tokens) #final_tok_trunc)
+                gold_score = scorer.predict("sentence_classification_head", gold_tokens) #gold_tok_trunc)
                 #breakpoint()
                 all_raw_scores.append(raw_score[0][1].data.item())
                 gold_cont_raw_scores.append(gold_score[0][1].data.item())
 
             #get language model scores for gold sequence and gen sequence
-            if num_final_tokens <= max_tok:
-                gen_lm_score = finalized[0][0]["score"]
-            else:
-                # TODO make this a function as it is repeated code
-                gen_sample = copy.copy(sample)
-                gen_sample["net_input"]["prev_output_tokens"] = final_tok_trunc
-                gen_sample["target"] = final_tok_trunc
-                seq_score = reference_scorer.generate(model.models, gen_sample)
-                gen_lm_score = seq_score[0][0]["score"]
-
-            gold_sample = copy.copy(sample)
-            gold_sample["net_input"]["prev_output_tokens"] = gold_tok_trunc
-            gold_sample['target'] = gold_tok_trunc
+            #if num_final_tokens <= max_tok:
+            #    gen_lm_score = finalized[0][0]["score"]
+            #else: #TODO I might not have to do the truncation since the logprobs are normalised anyway?
+            #    # TODO make this a function as it is repeated code
+            gen_sample = copy.deepcopy(sample)
+            gen_sample["net_input"]["prev_output_tokens"] = shift_tokens
+            gen_sample["target"] = final_tokens
+            seq_score = reference_scorer.generate(model.models, gen_sample)
+            gen_lm_score = seq_score[0][0]["score"]
+            #breakpoint()
             seq_score = reference_scorer.generate(model.models, gold_sample)
             gold_lm_score = seq_score[0][0]["score"]
 

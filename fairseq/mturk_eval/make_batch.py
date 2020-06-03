@@ -171,3 +171,4 @@ if __name__ == "__main__":
                 if args.attention_checks:
                     new_row.extend([attn_checks[i][0].strip(), attn_checks[i][1].strip()])
                 out_csv.writerow(new_row)
+

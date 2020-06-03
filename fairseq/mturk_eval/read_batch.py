@@ -521,6 +521,7 @@ if __name__ == "__main__":
     elif args.type == "attn_check":
         failed_attention_checks(files)
 
+
     else:
 
         title_exp_scores, raw_scores = process_accuracy_results(files, args.type,
@@ -564,4 +565,5 @@ if __name__ == "__main__":
                         continue
                     stat, p = stats.wilcoxon(exp2scores[target], exp2scores[exp])
                     print("Experiment: {} Stat: {} P: {}".format(exp, stat, p))
+
 

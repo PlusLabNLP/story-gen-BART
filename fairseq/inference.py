@@ -24,7 +24,7 @@ parser.add_argument('--max_len', type=int, default=250, help="max length of gene
 args = parser.parse_args()
 print("Args: ", args, file=sys.stderr)
 
-os.environ['CUDA_VISIBLE_DEVICES']="3"
+os.environ['CUDA_VISIBLE_DEVICES']="2,3"
 use_cuda = torch.cuda.is_available()
 
 ### load BART model
@@ -108,7 +108,7 @@ with open(args.infile, 'r') as fin, open(args.outfile, 'w') as fout:
                                                max_len_b=args.max_len, min_len=55, no_repeat_ngram_size=3,
                                                rescore=args.apply_disc,
                                                coefs=coefs, scorers=scorers, dedup=args.dedup,
-                                               banned_toks=banned_ids, verb_idxs=banned_verbs)
+                                               banned_toks=banned_ids, verb_idxs=banned_verbs, learn=False)
         for hypothesis in hypotheses_batch:
             fout.write(hypothesis.replace('\n','') + '\n')
             fout.flush()
