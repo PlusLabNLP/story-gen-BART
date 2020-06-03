@@ -135,5 +135,31 @@ Mixture Weight training
 ================================================
 
 Next step is mixture coefficient training
-train_corefs.py will take care of it
+train_coefs.py is a decoding script (like inference.py) that specifically trains coefficients. 
+
+The rescoring is done here:
+
+    ./story-gen-BART/fairseq/fairseq/search.py#L267-L324
+
+This is the method that sequence generator calls in order to sample the next k hypotheses and then return them as candidates along with their probabilities.
+
+In these 3 lines we concat the source tokens and all tokens generated so far with the current k hypotheses: 
+
+    ./story-gen-BART/fairseq/fairseq/search.py#L281-L284
+
+In this line we call RoBERTa on that tensor:
+
+    ./story-gen-BART/fairseq/fairseq/search.py#L298
+
+which returns a probability distribution over the vocabulary which we multiply by the coefficients here: 
+
+    ./story-gen-BARTfairseq/fairseq/search.py#L307
+
+and then add to the raw lprobs here:
+      
+     ./story-gen-BARTfairseq/fairseq/fairseq/search.py#L323-L324
+
+ignore all the if learn lines in between as those are only activated if training coefficients
+
+
 
