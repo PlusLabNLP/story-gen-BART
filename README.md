@@ -105,13 +105,19 @@ For Inference:
     python inference.py
   ```
  
-Train Discriminators aka Classifier aka whatever we start calling them
+Train Aristotelian Rescorers (aka classifiers, aka discriminators)
 ================================================
 
-To train a discriminator you will need to go through 3 steps:
-1) generate positive and negative example data
-2) compile tsv files for train and validation data
-3) finetune the discriminator for us Roberta-large
+To train a rescorer you will need to go through 3 steps:
+1) split the prompt + plot data into source and target
+2) generate positive and negative example data
+3) compile tsv files for train and validation data
+4) finetune the discriminator for us Roberta-large
+
+For 1-3):
+Use the script `preprocessing/make_cc_version_pnw_data.py` to split data into source and targets for creating training data.
+Then use the script `preprocessing/create_classifier_dataset.py` to generate positive and negative examples and the tsv.
+
 
 Preprocess task data and it needs binary .bin files to finetune roberta:
 ./examples/roberta/preprocess_GLUE_tasks.sh glue_data <glue_task_name>
