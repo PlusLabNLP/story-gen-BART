@@ -1,5 +1,6 @@
 # Run with sh run.sh directory
 dir=$1
+savedir=$2
 TOTAL_NUM_UPDATES=20000
 WARMUP_UPDATES=500      
 LR=3e-05
@@ -27,7 +28,9 @@ python train.py $dir \
     --clip-norm 0.1 \
     --lr-scheduler polynomial_decay --lr $LR --total-num-update $TOTAL_NUM_UPDATES --warmup-updates $WARMUP_UPDATES \
     --memory-efficient-fp16 --update-freq $UPDATE_FREQ \
-    --save-dir "checkpoint" \
+    --save-dir $savedir \
     --ddp-backend=no_c10d  \
     --skip-invalid-size-inputs-valid-test \
-    --find-unused-parameters;
+    --find-unused-parameters \
+    --tensorboard-logdir $savedir;
+
