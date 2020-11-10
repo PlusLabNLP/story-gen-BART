@@ -32,5 +32,6 @@ python train.py $dir \
     --ddp-backend=no_c10d  \
     --skip-invalid-size-inputs-valid-test \
     --find-unused-parameters \
+    --max-epoch 100 \
     --tensorboard-logdir $savedir;
 
