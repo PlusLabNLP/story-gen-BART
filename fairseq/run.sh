@@ -1,11 +1,13 @@
-TOTAL_NUM_UPDATES=20000  
+# Run with sh run.sh directory
+dir=$1
+TOTAL_NUM_UPDATES=20000
 WARMUP_UPDATES=500      
 LR=3e-05
 MAX_TOKENS=1024
 UPDATE_FREQ=16
 BART_PATH=./bart.large/model.pt
 
-python train.py temp \
+python train.py $dir \
     --restore-file $BART_PATH \
     --max-tokens $MAX_TOKENS \
     --task translation \
