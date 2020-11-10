@@ -19,7 +19,7 @@ parser.add_argument('--max_len', type=int, default=250, help="max length of gene
 args = parser.parse_args()
 print("Args: ", args, file=sys.stderr)
 
-os.environ['CUDA_VISIBLE_DEVICES']="1,2,3"
+# os.environ['CUDA_VISIBLE_DEVICES']="1,2,3"
 
 ### load BART model                                                                                                                                                                 
 bart = BARTModel.from_pretrained(
