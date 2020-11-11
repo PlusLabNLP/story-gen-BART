@@ -26,7 +26,9 @@ python train.py $dir \
     --dropout 0.1 --attention-dropout 0.1 \
     --weight-decay 0.01 --optimizer adam --adam-betas "(0.9, 0.999)" --adam-eps 1e-08 \
     --clip-norm 0.1 \
-    --lr-scheduler polynomial_decay --lr $LR --total-num-update $TOTAL_NUM_UPDATES --warmup-updates $WARMUP_UPDATES \
+    --lr-scheduler polynomial_decay \
+    --lr $LR --total-num-update $TOTAL_NUM_UPDATES \
+    --warmup-updates $WARMUP_UPDATES \
     --memory-efficient-fp16 --update-freq $UPDATE_FREQ \
     --save-dir $savedir \
     --ddp-backend=no_c10d  \
