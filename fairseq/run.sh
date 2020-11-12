@@ -1,11 +1,14 @@
-TOTAL_NUM_UPDATES=20000  
+# Run with sh run.sh directory
+dir=$1
+savedir=$2
+TOTAL_NUM_UPDATES=20000
 WARMUP_UPDATES=500      
 LR=3e-05
 MAX_TOKENS=1024
 UPDATE_FREQ=16
 BART_PATH=./bart.large/model.pt
 
-python train.py temp \
+python train.py $dir \
     --restore-file $BART_PATH \
     --max-tokens $MAX_TOKENS \
     --task translation \
@@ -23,9 +26,14 @@ python train.py temp \
     --dropout 0.1 --attention-dropout 0.1 \
     --weight-decay 0.01 --optimizer adam --adam-betas "(0.9, 0.999)" --adam-eps 1e-08 \
     --clip-norm 0.1 \
-    --lr-scheduler polynomial_decay --lr $LR --total-num-update $TOTAL_NUM_UPDATES --warmup-updates $WARMUP_UPDATES \
+    --lr-scheduler polynomial_decay \
+    --lr $LR --total-num-update $TOTAL_NUM_UPDATES \
+    --warmup-updates $WARMUP_UPDATES \
     --memory-efficient-fp16 --update-freq $UPDATE_FREQ \
-    --save-dir "checkpoint" \
+    --save-dir $savedir \
     --ddp-backend=no_c10d  \
     --skip-invalid-size-inputs-valid-test \
-    --find-unused-parameters;
+    --find-unused-parameters \
+    --max-epoch 100 \
+    --tensorboard-logdir $savedir;
+

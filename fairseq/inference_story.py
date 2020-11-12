@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 
 import sys
 import os
@@ -8,30 +9,47 @@ from fairseq.models.bart import BARTModel
 from fairseq.models.roberta import RobertaModel
 from utils import load_scorers
 
+parser = argparse.ArgumentParser(add_help=False)
+parser.description = "Generates stories from plots"
 
-parser = argparse.ArgumentParser()
-parser.add_argument('src')
-parser.add_argument('out')
-parser.add_argument('--batch_size', type=int, default=1)
-parser.add_argument('--banned_tok', nargs='+', default=["[", " [", "UN", " UN", "\n", " \n"], help="tokens to prevent generating")
-parser.add_argument('--max_len', type=int, default=250, help="max length of generation in BPE tok")
+required = parser.add_argument_group('Required arguments')
+optional = parser.add_argument_group('Optional arguments')
+
+# Add back help
+optional.add_argument(
+    '-h',
+    '--help',
+    action='help',
+    default=argparse.SUPPRESS,
+    help='Show this help message and exit'
+)
+
+required.add_argument('src', type=Path, help='Input file (e.g., val.source)')
+required.add_argument('out', type=Path, help='Output file (e.g., val.hypo)')
+optional.add_argument('--batch_size', type=int, default=1)
+optional.add_argument('--banned_tok', nargs='+', default=["[", " [", "UN", " UN", "\n", " \n"], help="tokens to prevent generating")
+optional.add_argument('--max_len', type=int, default=250, help="Max length of generation in BPE tok")
+required.add_argument('--bart_dir', type=Path, help="Path to directory with BART checkpoint", required=True)
+optional.add_argument('--checkpoint', type=str, default='checkpoint_best.pt',
+                    help="Which checkpoint file to use for BART")
 
 args = parser.parse_args()
 print("Args: ", args, file=sys.stderr)
 
-os.environ['CUDA_VISIBLE_DEVICES']="1,2,3"
-
-### load BART model                                                                                                                                                                 
+# Load BART model
+bart_path = args.bart_dir
+bart_checkpoint = args.checkpoint
 bart = BARTModel.from_pretrained(
-    'checkpoint-fullstory/',
-    checkpoint_file='checkpoint_best.pt',
+    bart_path,
+    checkpoint_file=bart_checkpoint,
     data_name_or_path='fullstory'
 )
 
-
-bart.cuda() # remove this line if not running with cuda                                                                                               
 bart.eval()
-bart.half() # doesn't work with CPU   
+use_cuda = torch.cuda.is_available()
+if use_cuda:
+    bart.cuda()
+    bart.half()
 
 count = 1
 bsz = args.batch_size

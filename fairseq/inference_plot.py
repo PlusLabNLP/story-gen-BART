@@ -1,36 +1,51 @@
 import argparse
-
+from pathlib import Path
 import sys
-import os
-import copy
 import time
 
 import torch
+
 from fairseq.models.bart import BARTModel
 from fairseq.models.roberta import RobertaModel
 from utils import load_scorers
 
+parser = argparse.ArgumentParser(add_help=False)
+parser.description = "Generates plots from prompts"
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--infile', type=str, default='./temp/val.source', help='input file')
-parser.add_argument('--outfile', type=str, default='./temp/val.hypo', help='output file')
-parser.add_argument('--apply_disc', action='store_true', help='whether to use discriminators to rescore')
-parser.add_argument('--scorers', type=str, default='checkpoint/WP_scorers.tsv', help='tsv with discriminator info')
-parser.add_argument('--batch_size', type=int, default=1)
-parser.add_argument('--dedup', action='store_true')
-parser.add_argument('--banned_tok', nargs='+', default=["[", " [", "UN", " UN"], help="tokens to prevent generating")
-parser.add_argument('--max_len', type=int, default=250, help="max length of generation in BPE tok") 
+required = parser.add_argument_group('Required arguments')
+optional = parser.add_argument_group('Optional arguments')
+
+# Add back help
+optional.add_argument(
+    '-h',
+    '--help',
+    action='help',
+    default=argparse.SUPPRESS,
+    help='Show this help message and exit'
+)
+required.add_argument('--infile', type=Path, help='Input file (e.g., val.source)', required=True)
+required.add_argument('--outfile', type=Path, help='Output file (e.g., val.hypo)', required=True)
+optional.add_argument('--apply_disc', action='store_true',
+                      help='Whether to use discriminators to rescore')
+optional.add_argument('--scorers', type=str, default='checkpoint/WP_scorers.tsv', help='TSV with discriminator info')
+optional.add_argument('--batch_size', type=int, default=1)
+optional.add_argument('--dedup', action='store_true')
+optional.add_argument('--banned_tok', nargs='+', default=["[", " [", "UN", " UN"], help="tokens to prevent generating")
+optional.add_argument('--max_len', type=int, default=250, help="Max length of generation in BPE tok")
+required.add_argument('--bart_dir', type=Path, help="Path to directory with BART checkpoint", required=True)
+optional.add_argument('--checkpoint', type=str, default='checkpoint_best.pt',
+                    help="Which checkpoint file to use for BART")
 
 args = parser.parse_args()
 print("Args: ", args, file=sys.stderr)
 
-os.environ['CUDA_VISIBLE_DEVICES']="2,3"
 use_cuda = torch.cuda.is_available()
-
-### load BART model
+# Load BART model
+bart_path = args.bart_dir
+bart_checkpoint = args.checkpoint
 bart = BARTModel.from_pretrained(
-    'checkpoint_full/',
-    checkpoint_file='checkpoint_best.pt',
+    bart_path,
+    checkpoint_file=bart_checkpoint,
     data_name_or_path='full'
 )
 
@@ -38,10 +53,8 @@ bart = BARTModel.from_pretrained(
 bart.eval()
 
 if use_cuda:
-    bart.cuda() # remove this line if not running with cuda
-    bart.half() # doesn't work with CPU
-
-
+    bart.cuda()
+    bart.half()
 
 ### load discriminators
 scorers, coefs = [], []
