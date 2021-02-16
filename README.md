@@ -1,3 +1,6 @@
+# Note, full code documentation will be available by EMNLP 2020 (Nov 16th). 
+Direct questions to [Seraphina](mailto:s.tarrant@ed.ac.uk)
+
 # story-gen-BART
 
 ## Introduction
