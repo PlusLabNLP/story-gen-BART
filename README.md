@@ -75,9 +75,9 @@ To generate plots, BART must learn from pairs of prompts and plots. The method i
     
     You should adjust the `--max-epoch 100` parameter. If you are running to verify that the code runs and finishes, set a low value (like 100). If you want to fully train the model, remove `--max-epoch`.
     
-To help in reproducibility , we have shared the data to finetune BART and finetuned PromptToPlot model
-In the STORYEMNLP folder "full" contains data required to train the model and checkpoint-full contains finetuned BART model
-https://drive.google.com/drive/folders/1cOouBxVsORnNdQJuZlH9fu3ACc7p9CwG?usp=sharing
+               To help in reproducibility , we have shared the data to finetune BART and finetuned PromptToPlot model
+               In the STORYEMNLP folder "full" contains data required to train the model and checkpoint-full contains finetuned BART model
+               https://drive.google.com/drive/folders/1cOouBxVsORnNdQJuZlH9fu3ACc7p9CwG?usp=sharing
 
 ### Story generation
 
@@ -150,9 +150,9 @@ The example comes from the `story` directory which contains several more example
     You should adjust the `--max-epoch 100` parameter. If you are running to verify that the code runs and finishes, set a low value (like 100). If you want to fully train the model, remove `--max-epoch`.
     
     
-To help in reproducibility , we have shared the data to finetune BART and finetuned PlotToStory model
-In the STORYEMNLP folder "fullstory" contains data required to train the model and checkpoint-fullstory contains finetuned BART model
-https://drive.google.com/drive/folders/1cOouBxVsORnNdQJuZlH9fu3ACc7p9CwG?usp=sharing
+               To help in reproducibility , we have shared the data to finetune BART and finetuned PlotToStory model
+               In the STORYEMNLP folder "fullstory" contains data required to train the model and checkpoint-fullstory contains finetuned BART model
+               https://drive.google.com/drive/folders/1cOouBxVsORnNdQJuZlH9fu3ACc7p9CwG?usp=sharing
 
 ### Train Aristotelian Rescorers (aka classifiers, aka discriminators)
 
