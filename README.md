@@ -1,4 +1,3 @@
-# Note, full code documentation will be available by EMNLP 2020 (Nov 16th). 
 Direct questions to [Seraphina](mailto:s.tarrant@ed.ac.uk)
 
 # story-gen-BART
@@ -80,6 +79,14 @@ To generate plots, BART must learn from pairs of prompts and plots. The method i
                https://drive.google.com/drive/folders/1cOouBxVsORnNdQJuZlH9fu3ACc7p9CwG?usp=sharing
 
 ### Story generation
+
+#### Full outputs
+For use in analysis and comparison to our system, the full set of outputs from the Aristotelian System and baselines used in the paper (Naive, and Prompt2Story) can be found here: https://drive.google.com/drive/folders/10VFDzJvH1ssByTch4UG8mh1DsTM0xpkI?usp=sharing 
+
+Files ending in `.auto` are used for automatic evaluation (1000 stories). Files ending in `.human` were used for human evaluation (95 stories). Titles coindexed with the stories are in `title.auto` and `title.human.filtered`. Note that the stories and titles for human evaluation were filtered (refer to the paper for details) and have been detokenized. No modifications were made to the stories used for auto evaluation. We also include `title+plot` files so you can view the intermediate plot representation. 
+Note that for the human title+plot files these have _not_ been filtered or detokenized, so they will be a superset of the `title.human.filtered` titles, and will not string match. 
+
+#### Implementation
 
 ```
 Input: <story plot>
