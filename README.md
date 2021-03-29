@@ -1,3 +1,25 @@
+Code for the EMNLP 2020 Paper [Content Planning for Neural Story Generation with Aristotelian Rescoring](https://www.aclweb.org/anthology/2020.emnlp-main.351.pdf).
+
+If you use this code, please cite as:
+```
+@inproceedings{goldfarb-tarrant-etal-2020-content,
+    title = "Content Planning for Neural Story Generation with Aristotelian Rescoring",
+    author = "Goldfarb-Tarrant, Seraphina  and
+      Chakrabarty, Tuhin  and
+      Weischedel, Ralph  and
+      Peng, Nanyun",
+    booktitle = "Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP)",
+    month = nov,
+    year = "2020",
+    address = "Online",
+    publisher = "Association for Computational Linguistics",
+    url = "https://www.aclweb.org/anthology/2020.emnlp-main.351",
+    doi = "10.18653/v1/2020.emnlp-main.351",
+    pages = "4319--4338",
+    abstract = "Long-form narrative text generated from large language models manages a fluent impersonation of human writing, but only at the local sentence level, and lacks structure or global cohesion. We posit that many of the problems of story generation can be addressed via high-quality content planning, and present a system that focuses on how to learn good plot structures to guide story generation. We utilize a plot-generation language model along with an ensemble of rescoring models that each implement an aspect of good story-writing as detailed in Aristotle{'}s Poetics. We find that stories written with our more principled plot-structure are both more relevant to a given prompt and higher quality than baselines that do not content plan, or that plan in an unprincipled way.",
+}
+```
+
 Direct questions to [Seraphina](mailto:s.tarrant@ed.ac.uk)
 
 # story-gen-BART
